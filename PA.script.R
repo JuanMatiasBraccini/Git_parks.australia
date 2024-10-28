@@ -1,13 +1,33 @@
                 # SCRIPT FOR ANALYSING AND REPORTING PARKS AUSTRALIA PROJECT 2019
-
+# Note: All analysis on video cameras now done in PA.script_shared.R
 # to do: 
 #   Once all data entered and validated, copy data set to C drive from M drive and move M drive to U/Shark databases
 #   Review calculations with Jack '#4. Rates of depredation, bait loss and drop outs'
 #   EM vs OM, which shots are comparable? some of the EM videos run out of battery..exclude those
+#   Fish depredation. Calculate also per km gn hours and per caught fish. Same for other behaviours
+#   MISSING: Depredation codes from Underwater video: Codes 10 Predated on & 12 Caught while predating
+#            There is also depredation data from Cameras 1 & 2 in the comments section (videos reviewed by Sarah and anyone else??)
+
+#    consider manyglm instead of adonis
 
 rm(list=ls(all=TRUE))
 
-if(!exists('handl_OneDrive')) source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+User="Matias"
+# User="Sarah"
+# User="Abbey"
+
+if(!exists('handl_OneDrive'))
+{
+  if(User=="Matias") source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+  if(User=="Sarah")
+  {
+    handl_OneDrive=function(x)paste('C:/Users',Usr,'OneDrive - Department of Primary Industries and Regional Development/Matias',x,sep='/')
+  }
+  if(User=="Abbey")
+  {
+    handl_OneDrive=function(x)paste('C:/Users',Usr,'OneDrive - Department of Primary Industries and Regional Development/Matias',x,sep='/')
+  }
+}
 
 library(tidyverse)
 library(dplyr)
@@ -46,19 +66,24 @@ library(janitor)
 options(stringsAsFactors = FALSE,dplyr.summarise.inform = FALSE) 
 
 #--------- DATA ------------
-source(handl_OneDrive("Analyses/Population dynamics/Git_Stock.assessments/NextGeneration.R"))
+if(User=="Matias") source(handl_OneDrive("Analyses/Population dynamics/Git_Stock.assessments/NextGeneration.R"))
 
 #1. Sharks data base
-User="Matias"
 if(User=="Matias") source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R'))
+if(User=="Sarah") source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R'))
+if(User=="Abbey") source(handl_OneDrive('Analyses/SOURCE_SCRIPTS/Git_other/Source_Shark_bio.R'))
 
+User="Matias"
+# User="Sarah"
+# User="Abbey"
 
 #2. Species list
 All.species.names=read.csv(handl_OneDrive("Data/Species.code.csv"))
 
 
 #3. PA - TEPS interactions recorded by Observers
-setwd('M:/Agency Data/Draft Publications/Braccini/2019-20_Parks Australia Project/Fieldwork/Data')
+#setwd('M:/Agency Data/Draft Publications/Braccini/2019-20_Parks Australia Project/Fieldwork/Data')
+setwd("//fish.wa.gov.au/Data/Production Databases/Shark/ParksAustralia_2019") 
 TEPS <- read_excel("TEPS interactions.xlsx", sheet = "Sheet1",skip = 1)
 
 
@@ -68,55 +93,86 @@ Lost.snoods<- read_excel("Broken hook specs.xlsx",sheet = "Sheet1")
 
 
 #5. PA - underwater video
-setwd(handl_OneDrive("Parks Australia/2019_project/Data/cameras"))
-
+Event.Mes.data.dump='Abbey_Sarah'
+#Event.Mes.data.dump='Jack'
+if(Event.Mes.data.dump=='Jack')
+{
+  if(User=="Matias") setwd(handl_OneDrive("Parks Australia/2019_project/Data/cameras"))
+  if(User=="Sarah") setwd(handl_OneDrive("Parks Australia/2019_project/Data/cameras"))
+  if(User=="Abbey")  setwd(handl_OneDrive("Parks Australia/2019_project/Data/cameras"))
+  
   #net
-file.name.GN="Gillnet_Data_2_12_2021_Clean.xlsx"
-Video.net.interaction <- read_excel(file.name.GN, sheet = "Interactions")
-Video.net.maxN <- read_excel(file.name.GN, sheet = "MaxN")
-Video.net.obs <- read_excel(file.name.GN, sheet = "Observation") 
-
+  file.name.GN="Gillnet_Data_2_12_2021_Clean.xlsx"
+  Video.net.interaction <- read_excel(file.name.GN, sheet = "Interactions")
+  Video.net.maxN <- read_excel(file.name.GN, sheet = "MaxN")
+  Video.net.obs <- read_excel(file.name.GN, sheet = "Observation") 
+  
   #longline
-file.name.LL="Longline_Data_1_12_2021_Clean.xlsx"
-Video.longline.interaction <- read_excel(file.name.LL, sheet = "Interactions")
-Video.longline.maxN <- read_excel(file.name.LL, sheet = "MaxN")
-Video.longline.obs <- read_excel(file.name.LL, sheet = "Observations")
-
+  file.name.LL="Longline_Data_1_12_2021_Clean.xlsx"
+  Video.longline.interaction <- read_excel(file.name.LL, sheet = "Interactions")
+  Video.longline.maxN <- read_excel(file.name.LL, sheet = "MaxN")
+  Video.longline.obs <- read_excel(file.name.LL, sheet = "Observations")
+  
   #habitat 
-#note: CATAMI code used to determine habitat types
-file.name.habitat="Gillnet_longline habitat.xlsx"
-Video.habitat<- read_excel(file.name.habitat, sheet = "gillnet habitat")
-Video.habitat.LL<- read_excel(file.name.habitat, sheet = "longline habitat")
+  #note: CATAMI code used to determine habitat types
+  file.name.habitat="Gillnet_longline habitat.xlsx"
+  Video.habitat<- read_excel(file.name.habitat, sheet = "gillnet habitat")
+  Video.habitat.LL<- read_excel(file.name.habitat, sheet = "longline habitat")
+  
+  
+  #6. PA - deck camera 1 (points to measuring board)
+  file.name.habitat.deck="Deck 1 habitat and fish_6_12_2021.xlsx"
+  Video.habitat.deck<- read_excel(file.name.habitat.deck, sheet = "Habitat")
+  Video.camera1.deck<- read_excel(file.name.habitat.deck, sheet = "Deck 1 fish landed")
+  Video.camera1.deck_extra.records<- read_excel(file.name.habitat.deck, sheet = "extra records")
+  
+  
+  #7. PA - deck camera 2 (points to roller)
+  file.name.camera2.deck="Deck 2_6_12_2021.xlsx"
+  Video.camera2.deck<- read_excel(file.name.camera2.deck, sheet = "Deck 2")
+  Video.camera2.deck_observations<- read_excel(file.name.camera2.deck, sheet = "Other observations")
+  
+  
+  #8. PA - subsurface camera   
+  file.name.subsurface="SubSurface_7_12_2021.xlsx"
+  Video.subsurface<- read_excel(file.name.subsurface, sheet = "ALL Dot Point Measurements")
+  Video.subsurface.comments<- read_excel(file.name.subsurface, sheet = "comment")
+  
+  
+  #9. PA - socio-economic survey
+  setwd(handl_OneDrive("Parks Australia/2019_project/Data/socio-economics"))
+  Survey.fishers<- read_excel("Questionnaire_fisher.xlsx", sheet = "questionnaire")
+  Survey.fishers.metadata<- read_excel("Questionnaire_fisher.xlsx", sheet = "metadata")
+  Survey.processor<- read_excel("Questionnaire_processor.xlsx", sheet = "questionnaire")
+  Survey.processor.metadata<- read_excel("Questionnaire_processor.xlsx", sheet = "metadata")
+  Additional.questions<- read_excel("Additional questions.xlsx", sheet = "data")
+  Additional.questions.metadata<- read_excel("Additional questions.xlsx", sheet = "metadata")
+}
 
-
-#6. PA - deck camera 1 (points to measuring board)
-file.name.habitat.deck="Deck 1 habitat and fish_6_12_2021.xlsx"
-Video.habitat.deck<- read_excel(file.name.habitat.deck, sheet = "Habitat")
-Video.camera1.deck<- read_excel(file.name.habitat.deck, sheet = "Deck 1 fish landed")
-Video.camera1.deck_extra.records<- read_excel(file.name.habitat.deck, sheet = "extra records")
-
-
-#7. PA - deck camera 2 (points to roller)
-file.name.camera2.deck="Deck 2_6_12_2021.xlsx"
-Video.camera2.deck<- read_excel(file.name.camera2.deck, sheet = "Deck 2")
-Video.camera2.deck_observations<- read_excel(file.name.camera2.deck, sheet = "Other observations")
-
-
-#8. PA - subsurface camera   
-file.name.subsurface="SubSurface_7_12_2021.xlsx"
-Video.subsurface<- read_excel(file.name.subsurface, sheet = "ALL Dot Point Measurements")
-Video.subsurface.comments<- read_excel(file.name.subsurface, sheet = "comment")
-
-
-#9. PA - socio-economic survey
-setwd(handl_OneDrive("Parks Australia/2019_project/Data/socio-economics"))
-Survey.fishers<- read_excel("Questionnaire_fisher.xlsx", sheet = "questionnaire")
-Survey.fishers.metadata<- read_excel("Questionnaire_fisher.xlsx", sheet = "metadata")
-Survey.processor<- read_excel("Questionnaire_processor.xlsx", sheet = "questionnaire")
-Survey.processor.metadata<- read_excel("Questionnaire_processor.xlsx", sheet = "metadata")
-Additional.questions<- read_excel("Additional questions.xlsx", sheet = "data")
-Additional.questions.metadata<- read_excel("Additional questions.xlsx", sheet = "metadata")
-
+if(Event.Mes.data.dump=='Abbey_Sarah') 
+{
+  #1. read in data
+  setwd('M:/Agency Data/Draft Publications/Braccini/2019-20_Parks Australia Project/Fieldwork/Data/Gillnet EM output')
+  filenames=list.files(pattern='*.csv')
+  #dummy <- lapply(filenames, read.csv,skip=4)
+  
+  dummy=vector('list',length(filenames))
+  for(i in 264:length(filenames)) dummy[[i]]=read.csv(filenames[i],skip=4)
+  
+  
+  #2. put data in standard format
+  for(i in i:length(dummy))
+  {
+    colnames(dummy[[i]])=tolower(colnames(dummy[[i]]))
+  #  dummy[[i]]=
+  #    maxn interaction escape #ACA
+  }
+    
+  #Video.net.interaction 
+  #Video.net.maxN 
+  #Video.net.obs
+  
+}
 
 #10. Ports
 Port.loc=read.csv(handl_OneDrive('Analyses/Parks Australia/outputs/Historic_catch_effort/Ports.csv'))
@@ -130,6 +186,8 @@ Shark.Fin.Price.List=read.csv(handl_OneDrive("Data/Catch and Effort/Shark Fin Pr
 PRICES_abares=read.csv(handl_OneDrive("Analyses/Data_outs/PRICES.csv")) 
 Shark.price.list=read.csv(handl_OneDrive("Analyses/Labelling/Outputs/Shark.price.list.csv")) 
 PRICES=read.csv(handl_OneDrive("Analyses/Data_outs/PRICES.csv"),stringsAsFactors = F)
+Restaurant.price=read.csv(handl_OneDrive("Data/Labelling/Restaurants.csv"),stringsAsFactors = F)
+Scale.factor=3.3  #multiplier for restaurant sold fish from wholesale price (Trenton Brennan, Ocean & Paddock). 
 
 #13. Total number of vessel in TDGDLF
 TDGDLF.vessels=read.csv(handl_OneDrive('Analyses/Catch and effort/State of fisheries/2018-19/1.4.Number.of.vessels.csv'))
@@ -264,7 +322,7 @@ Trunk.wastage=data.frame(     #calculations based on 1000 kg of trunks
 Scalefish.to.fillet=0.35      #scalefish recovery rate from whole to fillet (Adam Soumalidis: "27 to 45% 
                                     # depending on species, 35% on average")
 
-fillet.weight=150     #fillet weight in grams
+fillet.weight=150     #fillet weight in grams (Rogers 2017)
 
 Trunk.multiplier=data.frame(      #All columns are in $ per kg
         Species='Gummy shark',
@@ -1798,10 +1856,10 @@ if(do.Historic)
     p1.N.ports=p1
     p2.N.vessels=p2
     
-    ggarrange(p1.map+ggtitle("1988-89 (44 ports)"),
-              p1.N.ports,
-              p2.map+ggtitle("2019-20 (12 ports)"),
+    ggarrange(p1.N.ports,
+              p1.map+ggtitle("1988-89 (53 ports)"),
               p2.N.vessels+ theme(legend.position = "none"),
+              p2.map+ggtitle("2019-20 (14 ports)"),
               ncol = 2, nrow = 2)
     ggsave(le.paste("Papers/socio_economics/Figure1.tiff"),width = 9,height = 9,compression = "lzw")
   }
@@ -1977,12 +2035,57 @@ if(do.Historic)
   
   if(do.soc.econ.papr)
   {
-    ggarrange(X+xlab('')+theme_PA(axs.T.siz=13)+theme(legend.title =element_blank()),
-              P1+theme_PA(axs.T.siz=13),
-              P2+theme_PA(axs.T.siz=13),
-              ncol=1,
+    X=dd%>%
+      ggplot(aes(YEAR,n))+
+      geom_line(data=dd1, aes(YEAR,ktch.per.ves,color=group),size=1.5)+
+      ylab("Annual catch (tonnes) per vessel")+
+      xlab("Financial year")+
+      scale_color_manual(values=dis.cols)+
+      scale_fill_manual(values=dis.cols)+
+      theme_PA(Ttl.siz=18,Sbt.siz=16,str.siz=12,strx.siz=12,
+               cap.siz=10,leg.siz=16,axs.t.siz=10,axs.T.siz=14)+
+      theme(legend.position = "top",
+            legend.title = element_blank(),
+            plot.margin=unit(c(.1,.5,.1,.1),"cm"))+
+      guides(fill = guide_legend(nrow = 1),color = guide_legend(nrow = 1))
+    
+    P2=rbind(d,d1)%>%
+      mutate(Data.set=factor(Data.set,levels=c("Monthly","Daily")))%>%
+      ggplot(aes(YEAR,Bdays.mean,color=group))+
+      geom_line(size=1.5,linetype='solid')+
+      ylab("Annual fishing days per vessel")+
+      xlab("")+
+      scale_color_manual(values=dis.cols)+
+      theme_PA(Ttl.siz=18,Sbt.siz=16,str.siz=12,strx.siz=12,
+               cap.siz=10,leg.siz=12,axs.t.siz=10,axs.T.siz=14)+
+      theme(legend.position = "top",
+            legend.title = element_blank(),
+            plot.margin=unit(c(.1,.5,.1,.1),"cm"))+
+      guides(fill = guide_legend(nrow = 1))
+    
+    X.catch.rate=dd1%>%
+      left_join(rbind(d,d1)%>%
+                  dplyr::select(-c(Bdays.sd,group,Data.set)),
+                by=c('YEAR','METHOD','zone'))%>%
+      mutate(CPUE=ktch.per.ves/Bdays.mean)%>%
+      ggplot(aes(YEAR,CPUE,color=group))+
+      geom_line(size=1.5)+
+      ylab("Annual catch rate (tonnes per day) per vessel")+
+      xlab("Financial year")+
+      scale_color_manual(values=dis.cols)+
+      scale_fill_manual(values=dis.cols)+
+      theme_PA(Ttl.siz=18,Sbt.siz=16,str.siz=12,strx.siz=12,
+               cap.siz=10,leg.siz=12,axs.t.siz=10,axs.T.siz=14)+
+      theme(legend.position = 'none',
+            plot.margin=unit(c(.1,.5,.1,.1),"cm"))+
+      guides(fill = guide_legend(nrow = 1),color = guide_legend(nrow = 1))
+    ggarrange(P1+theme_PA(axs.T.siz=14)+theme(legend.title =element_blank()),
+              P2+theme_PA(axs.T.siz=14),
+              X+theme_PA(axs.T.siz=14),
+              X.catch.rate+theme_PA(axs.T.siz=14),
+              ncol=2,nrow=2,
               common.legend=TRUE)
-    ggsave(le.paste("Papers/socio_economics/Figure2.tiff"),width = 7,height = 9,compression = "lzw")
+    ggsave(le.paste("Papers/socio_economics/Figure2.tiff"),width = 10,height = 10,compression = "lzw")
     
   }
 
@@ -3189,6 +3292,20 @@ integer_breaks <- function(n = 5, ...) {
 
 
 #---------Manipulate PA Observer and underwater cameras data ------------ 
+
+#Export data for Abbey
+Data.for.Abbey=list(DATA=DATA,All.species.names=All.species.names,
+                    Video.net.obs=Video.net.obs,Video.net.interaction=Video.net.interaction,Video.net.maxN=Video.net.maxN,
+                    Video.longline.obs=Video.longline.obs,Video.longline.interaction=Video.longline.interaction,Video.longline.maxN=Video.longline.maxN,
+                    Video.camera1.deck=Video.camera1.deck, Video.camera1.deck_extra.records=Video.camera1.deck_extra.records,
+                    Video.camera2.deck=Video.camera2.deck, Video.camera2.deck_observations=Video.camera2.deck_observations)
+for(i in 1:length(Data.for.Abbey))
+{
+  write.csv(Data.for.Abbey[[i]],handl_OneDrive(paste('Students/2020_Abbey Shuttleworth/Data/',names(Data.for.Abbey)[i] ,'.csv',sep='')),
+                                               row.names = F) 
+}
+  
+
 #Observer data  
 DATA_PA=DATA%>%
   distinct(sheet_no,.keep_all=TRUE)%>%
@@ -5725,7 +5842,7 @@ rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.gr
   filter(!SP.group%in%TEP.groups)%>%
   mutate(Method=capitalize(Method))%>%
   group_by(Method,Interaction,SP.group)%>%
-  summarise(n=sum(Number))%>%
+  summarise(n=sum(Number,na.rm=T))%>%
   filter(!is.na(Interaction))%>%
   mutate(Interaction=capitalize(tolower(Interaction)),
          SP.group=factor(SP.group,levels=SP.group.levels))%>%
@@ -5749,7 +5866,7 @@ rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.gr
   filter(!SP.group%in%TEP.groups)%>%
   mutate(Method=capitalize(Method))%>%
   group_by(Method,Interaction)%>%
-  summarise(n=sum(Number))%>%
+  summarise(n=sum(Number,na.rm=T))%>%
   filter(!is.na(Interaction))%>%
   mutate(Interaction=capitalize(tolower(Interaction)))%>%
   ggplot(aes(fill=Method, y=n, x=Interaction)) + 
@@ -8218,6 +8335,118 @@ if(do.inter.for.each.shot)
                    pull(sheet_no))
 }
 
+#check ASLs
+check.ASL=FALSE
+if(check.ASL)
+{
+  #underwater
+  ASL.uw=rbind(Video.longline.interaction%>%dplyr::select(OpCode,Method,Interaction,Number,SP.group,Species,Code),
+               Video.net.interaction%>%dplyr::select(OpCode,Method,Interaction,Number,SP.group,Species,Code))%>%
+    mutate(Number=1,
+           Method=capitalize(Method))%>%
+    filter(SP.group%in%TEP.groups | Code%in%TEPS_Shark.rays)%>%
+    filter(!Species=='birds feeding at surface')%>%
+    left_join(TEPS.names,by="Code")%>%
+    filter(Code==41131005)%>%
+    mutate(sheet_no=sapply( strsplit( OpCode, "_" ), "[", 3))%>%
+    dplyr::select(-c(OpCode,Colr))%>%
+    mutate(Obs.plat='Underwat')
+  
+  #subsurface
+  ASL.subs=rbind(Video.subsurface.comments%>%
+                   filter(Code%in%TEPS.codes)%>%
+                   mutate(Method=capitalize(tolower(Period)),
+                          Number=1,
+                          Interaction=ifelse(grepl('diving',comment),'diving',NA))%>%
+                   dplyr::select(Method,Interaction,Code,Number,SHEET_NO),
+                 Video.subsurface%>%
+                   filter(Code%in%TEPS.codes)%>%
+                   mutate(Number=1,
+                          Method=capitalize(Period),
+                          Drop.out=capitalize(tolower(Drop.out)),
+                          Dropout.condition=tolower(Dropout.condition),
+                          Dropout.condition=case_when(is.na(Dropout.condition)~'',
+                                                      TRUE~Dropout.condition),
+                          dummy=case_when(Drop.out=="Yes"~"Drop out",
+                                          Drop.out=="No"~"Caught"),
+                          Interaction=case_when(dummy=="Drop out"~paste(dummy," (",Dropout.condition,")",sep=''),
+                                                dummy=="Caught"~dummy))%>%
+                   dplyr::select(Method,Interaction,Code,Number,SHEET_NO))%>%   
+    left_join(TEPS.names,by="Code")%>%
+    filter(Code==41131005)%>%
+    mutate(Obs.plat='SubSurf')
+  
+  
+  #Deck 2
+  ASL.deck2=rbind(Video.camera2.deck_observations%>%    
+                    filter(Code%in%TEPS.codes)%>%
+                    dplyr::select(Period,Genus,Species,Code,Activity,SHEET_NO,Method),
+                  Video.camera2.deck%>%
+                    filter(Code%in%TEPS.codes)%>%
+                    mutate(Activity=ifelse(dropout=='Yes' & gaffed=="No","Drop out",
+                                           ifelse(dropout=='Yes' & gaffed=="Yes","Drop out and gaffed",
+                                                  NA)))%>%
+                    dplyr::select(Period,Genus,Species,Code,Activity,SHEET_NO,Method))%>%
+    filter(!is.na(Activity))%>%
+    left_join(TEPS.names,by="Code")%>%
+    filter(Code==41131005)%>%
+    mutate(Obs.plat='Deck2')
+  
+  #Observer
+  ASL.obs=rbind(d.teps,d.data)%>%
+    filter(common.name=='Australian sea-lion')%>%
+    mutate(Obs.plat='Observer')
+  
+  #combine all
+  ASL.tot=rbind(ASL.obs%>%
+                  rename(Activity=contact.code.to.complete)%>%
+                  dplyr::select(sheet_no,Method,Activity,Name,n,Obs.plat),
+                ASL.deck2%>%
+                  mutate(n=1)%>%
+                  rename(sheet_no=SHEET_NO)%>%
+                  dplyr::select(sheet_no,Method,Activity,Name,n,Obs.plat))
+  
+  ASL.tot=rbind(ASL.tot,
+                ASL.uw%>%
+                  rename(Activity=Interaction,
+                         n=Number)%>%
+                  dplyr::select(sheet_no,Method,Activity,Name,n,Obs.plat))
+  
+  ASL.tot=rbind(ASL.tot,
+                ASL.subs%>%
+                  rename(sheet_no=SHEET_NO,
+                         Activity=Interaction,
+                         n=Number)%>%
+                  dplyr::select(sheet_no,Method,Activity,Name,n,Obs.plat))%>%
+    mutate(Method=ifelse(Method=='GN','Gillnet',Method))
+  
+  ASL.tot%>%
+    group_by(sheet_no,Method,Activity ,Obs.plat)%>%
+    summarise(N=sum(n))%>%
+    spread(sheet_no,N,fill=0)
+  
+  
+  ASL.tot=ASL.tot%>%
+    left_join(DATA%>%
+                distinct(sheet_no, mid.lat, mid.long, date,botdepth,block,zone),
+              by='sheet_no')%>%
+    arrange(sheet_no)%>%
+    mutate(Activity=ifelse(Activity=='feeding from gillnet','Feeding',Activity))
+  
+  ASL.tot%>%
+    ggplot(aes(mid.long,mid.lat,color=Activity))+
+    geom_jitter(size=2)+
+    facet_wrap(~Method)+
+    theme(legend.position = 'top',
+          legend.title = element_blank())
+  
+  library(rgdal)
+  ASL_shape.file=readOGR(handl_OneDrive("Data/Mapping/Closures/ASL_closures/ASL_Closures.shp")) #south coast only
+  
+  plot(ASL_shape.file,col="chartreuse3")
+  
+}
+
 
 #---------Analyse PA socio-economic survey ------------
 # Consider for paper:
@@ -8275,7 +8504,7 @@ Fishers.list=list(c("Ownership", "Employment", "Demographics"),
                   c("Costs", "Other"),
                   "Bus. Exp. location")
 names(Fishers.list)=Fishers.list
-for(l in 1:length(Fishers.list))
+for(l in 1:length(Fishers.list)) 
 {
   if(length(Fishers.list[[l]])>1) names(Fishers.list)[l]=paste(Fishers.list[[l]],collapse="_")
 }
@@ -8722,6 +8951,16 @@ fn.average.barplt=function(d.f,d.f_m,Dat.f,d.p,d.p_m,Dat.p,REMUV,REMUV.p,XLAB,YL
   if(Rotate>0) p=p+theme(axis.text.x = element_text(angle = Rotate, vjust = 1, hjust=1))
   
   print(p)
+  write.csv(d%>%
+              dplyr::select(Question,Mean,SD,Dat)%>%
+              rename(Species=Question,
+                     Price_mean=Mean,
+                     Price.sd=SD,
+                     Source=Dat)%>%
+              mutate(Comments=ifelse(grepl('Fisher',Source),'AUD per kg of trunks (sharks) or whole fish (scalefish)',
+                              ifelse(grepl('Processor',Source),'AUD per kg of fillets',
+                                     NA))),
+            le.paste("Socio-economics/Price.per.kg.csv"),row.names = F) 
 }
 Chunk=c(paste(paste('Q.10',letters[1:11],sep='.'),'retail',sep='_'),paste(paste('Q.10',letters[1:11],sep='.'),'wholesale',sep='_'))
 fn.average.barplt(d.f=Survey.fishers[,paste('Q.13',letters[1:11],sep='.')],
@@ -8946,6 +9185,9 @@ Fisher.price.max=fn.get.sp.price(d=Survey.fishers,
                                  do.what='max')%>%  
   dplyr::select(-Q) 
 
+Fisher.price=full_join(Fisher.price.min%>%rename(Min=Mean),
+                       Fisher.price.max%>%rename(Max=Mean),
+                       by='Species')
   #Processors
 #note: Mean (min,max) is the mean $ per kg of fillets
 Processor.price.min=fn.get.sp.price(d=Survey.processor,
@@ -8965,6 +9207,10 @@ Processor.price.max=fn.get.sp.price(d=Survey.processor,
   mutate(Sector=ifelse(grepl('retail',Q),'retail','wholesale'))%>%
   dplyr::select(-Q)
 
+Processor.price=full_join(Processor.price.min%>%rename(Min=Mean),
+                          Processor.price.max%>%rename(Max=Mean),
+                          by=c('Species','Sector'))
+
   #Fish & Chip 
 
   #ABARES
@@ -8977,6 +9223,8 @@ PRICES_abares=PRICES_abares%>%
 
 
   #9.2 Get values by sector  
+MC.sims=1000
+
 #note: this assumes the entire catch is sold only by a given sector
 fn.value=function(price_survey,annual.ktch,price_abares=NULL,
                          wastage.fillet.shrk=NULL,wastage.bellyflap.shrk=NULL,
@@ -9033,14 +9281,27 @@ fn.value=function(price_survey,annual.ktch,price_abares=NULL,
   
   return(Value.in.millions)
 }
-  #Fishers
+  #9.2.1 Fishers (if no price available from survey, the use Abares, ie the 'PRICE' dataset)
 Value.to.fisher_millions.min=fn.value(price_survey=Fisher.price.min,
                                       annual.ktch=Avrg.ktch,
                                       price_abares=PRICES) 
 Value.to.fisher_millions.max=fn.value(price_survey=Fisher.price.max,
                                       annual.ktch=Avrg.ktch,
                                       price_abares=PRICES) 
-  #Processors 
+
+Value.to.fisher_millions.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  price.sample=Fisher.price%>%mutate(Mean=NA) 
+  for(x in 1:nrow(price.sample)) price.sample$Mean[x]=with(price.sample,runif(1,Min[x],Max[x]))
+  price.sample=price.sample%>%dplyr::select(Mean,Species)
+  Value.to.fisher_millions.MC[[m]]=fn.value(price_survey=price.sample,
+                                            annual.ktch=Avrg.ktch,
+                                            price_abares=PRICES)
+}
+
+
+  #9.2.2 Processors 
 Value.to.processor_millions_retail.min=fn.value(price_survey=Processor.price.min%>%
                                                      filter(Sector=='retail'),
                                                 annual.ktch=Avrg.ktch,
@@ -9067,7 +9328,30 @@ Value.to.processor_millions_wholesale.max=fn.value(price_survey=Processor.price.
                                                    wastage.fillet.tel=Scalefish.to.fillet)
 
 
-  #Fish & Chip
+Value.to.processor_millions_retail.MC=Value.to.processor_millions_wholesale.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  price.sample=Processor.price%>%mutate(Mean=NA) 
+  for(x in 1:nrow(price.sample)) price.sample$Mean[x]=with(price.sample,runif(1,Min[x],Max[x]))
+  price.sample=price.sample%>%dplyr::select(Mean,Species,Sector)
+  
+  Value.to.processor_millions_retail.MC[[m]]=fn.value(price_survey=price.sample%>%
+                                                        filter(Sector=='retail'),
+                                                      annual.ktch=Avrg.ktch,
+                                                      wastage.fillet.shrk=Trunk.wastage$Trunk.to.fillet,  
+                                                      wastage.bellyflap.shrk=Trunk.wastage$Trunk.to.belly.flat,
+                                                      wastage.fillet.tel=Scalefish.to.fillet)
+  
+  Value.to.processor_millions_wholesale.MC[[m]]=fn.value(price_survey=price.sample%>%
+                                                           filter(Sector=='wholesale'),
+                                                         annual.ktch=Avrg.ktch,
+                                                         wastage.fillet.shrk=Trunk.wastage$Trunk.to.fillet,  
+                                                         wastage.bellyflap.shrk=Trunk.wastage$Trunk.to.belly.flat,
+                                                         wastage.fillet.tel=Scalefish.to.fillet)
+}
+
+
+  #9.2.3 Fish & Chip
 
     #Sharks
 Shark.price.list=Shark.price.list%>%
@@ -9089,6 +9373,13 @@ fn.value.fish.chip_shk=function(price,annual.ktch,wastage.fillet.shrk,wastage.be
       mutate(Price=case_when(is.na(Price.per.kg.max) & Taxa=='Elasmobranch' ~ Shark.price,
                              TRUE~Price.per.kg.max))
   }
+  if(do.what=='mean')
+  {
+    Shark.price=price%>%filter(Species=='Shark')%>%pull(Price.per.kg.mean)
+    d=left_join(annual.ktch,price,by=c('COMMON_NAME'='Species'))%>%
+      mutate(Price=case_when(is.na(Price.per.kg.mean) & Taxa=='Elasmobranch' ~ Shark.price,
+                             TRUE~Price.per.kg.mean))
+  }
   d=d%>%
     mutate(Revenue.fillet=case_when(Taxa=='Elasmobranch'~Avg.annual.landed_kg*Price*wastage.fillet.shrk),
            Revenue.belly=case_when(Taxa=='Elasmobranch'~Avg.annual.landed_kg*Price*wastage.bellyflap.shrk),
@@ -9108,6 +9399,20 @@ Value.to.fish.chip_millions_shk.max=fn.value.fish.chip_shk(price=Shark.price.lis
                                                            wastage.fillet.shrk=Trunk.wastage$Trunk.to.fillet,
                                                            wastage.bellyflap.shrk=Trunk.wastage$Trunk.to.belly.flat,
                                                            do.what='max')
+
+Value.to.fish.chip_millions_shk.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  price.sample=Shark.price.list%>%mutate(Price.per.kg.mean=NA) 
+  for(x in 1:nrow(price.sample)) price.sample$Price.per.kg.mean[x]=with(price.sample,runif(1,Price.per.kg.min[x],Price.per.kg.max[x]))
+  price.sample=price.sample%>%dplyr::select(Price.per.kg.mean,Species)
+  Value.to.fish.chip_millions_shk.MC[[m]]=fn.value.fish.chip_shk(price=price.sample,
+                                                                 annual.ktch=Avrg.ktch%>%filter(Taxa=='Elasmobranch' & !COMMON_NAME=="Shark fin"),
+                                                                 wastage.fillet.shrk=Trunk.wastage$Trunk.to.fillet,
+                                                                 wastage.bellyflap.shrk=Trunk.wastage$Trunk.to.belly.flat,
+                                                                 do.what='mean')
+}
+
 
     #Scalefish 
 fn.value.fish.chip_tel=function(beach.price,multiplier,annual.ktch)
@@ -9137,10 +9442,24 @@ Value.to.fish.chip_millions_tel.max=fn.value.fish.chip_tel(beach.price=Fisher.pr
                                                            multiplier=FSRDGVP.multipliers,
                                                            annual.ktch=Avrg.ktch%>%filter(Taxa=='Teleost'))
 
+Value.to.fish.chip_millions_tel.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  price.sample=Fisher.price%>%mutate(Mean=NA) 
+  for(x in 1:nrow(price.sample)) price.sample$Mean[x]=with(price.sample,runif(1,Min[x],Max[x]))
+  price.sample=price.sample%>%dplyr::select(Mean,Species)
+  Value.to.fish.chip_millions_tel.MC[[m]]=fn.value.fish.chip_tel(beach.price=price.sample,
+                                                                 multiplier=FSRDGVP.multipliers,
+                                                                 annual.ktch=Avrg.ktch%>%filter(Taxa=='Teleost'))
+}
+
     #Total
 Value.to.fish.chip_millions.min=Value.to.fish.chip_millions_shk.min+Value.to.fish.chip_millions_tel.min
 Value.to.fish.chip_millions.max=Value.to.fish.chip_millions_shk.max+Value.to.fish.chip_millions_tel.max
 
+Value.to.fish.chip_millions.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) Value.to.fish.chip_millions.MC[[m]]=Value.to.fish.chip_millions_shk.MC[[m]]+Value.to.fish.chip_millions_tel.MC[[m]]
+  
 
   #9.3 Get Proportion Processor sold retail and wholesale
 fn.get.proportion.ktch=function(d,d_m,Chunk)
@@ -9166,34 +9485,54 @@ fn.get.proportion.ktch=function(d,d_m,Chunk)
 Prop.ktch.processor=fn.get.proportion.ktch(d=Survey.processor,
                                            d_m=Survey.processor.metadata,
                                            Chunk=paste('Q.6',letters[1:7],sep='.'))
-
+Prop.ktch.processor$Proportion=Prop.ktch.processor$Proportion/sum(Prop.ktch.processor$Proportion)
 
   #9.4 Calculate actual value considering Processor and Fish & Chips proportion of the catch
 fn.out=function(x) Prop.ktch.processor%>%filter(Group==x)%>%pull(Proportion)
 Fishery.value.min=Value.to.processor_millions_retail.min * fn.out('Retail') + 
-                  Value.to.processor_millions_wholesale.min * fn.out('Wholesale') +
+                  Value.to.processor_millions_wholesale.min *Scale.factor* fn.out('Wholesale') +
                   Value.to.fish.chip_millions.min * fn.out('Fish.chips')
 Fishery.value.max=Value.to.processor_millions_retail.max * fn.out('Retail') + 
-                  Value.to.processor_millions_wholesale.max * fn.out('Wholesale') +
+                  Value.to.processor_millions_wholesale.max *Scale.factor* fn.out('Wholesale') +
                   Value.to.fish.chip_millions.max * fn.out('Fish.chips')
 
+Fishery.value.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  Fishery.value.MC[[m]]=Value.to.processor_millions_retail.MC[[m]] * fn.out('Retail') + 
+                        Value.to.processor_millions_wholesale.MC[[m]] *Scale.factor* fn.out('Wholesale') +
+                        Value.to.fish.chip_millions.MC[[m]] * fn.out('Fish.chips')
+}
+
+Value.MC=data.frame(Fisher=unlist(Value.to.fisher_millions.MC),  
+                    Fishery=unlist(Fishery.value.MC))
+Median=Value.MC%>%summarise(across(where(is.numeric), ~ median(.x, na.rm = TRUE)))
+CI.low=Value.MC%>%summarise(across(where(is.numeric), ~ quantile(.x, probs=0.025,na.rm = TRUE)))
+CI.up=Value.MC%>%summarise(across(where(is.numeric), ~ quantile(.x, probs=0.975,na.rm = TRUE)))
 
 write.csv(data.frame(Sector=c('Fisher','Fishery'),
                      Value_millions.per.year.min=c(Value.to.fisher_millions.min,Fishery.value.min),
-                     Value_millions.per.year.max=c(Value.to.fisher_millions.max,Fishery.value.max)),
+                     Value_millions.per.year.max=c(Value.to.fisher_millions.max,Fishery.value.max),
+                     CI_lower=unlist(CI.low),
+                     Median=unlist(Median),
+                     CI_upper=unlist(CI.up))%>%mutate(Delta.CV=Median-CI_lower),
           le.paste("Socio-economics/Fishery.value.csv"),row.names = F)
 
 
-#10. Fishery valuation - GVA  
+#10. Fishery valuation - GVA     
 #10.1 Fishery revenue
 GVA.revenue.min=Value.to.fisher_millions.min*1e6
 GVA.revenue.max=Value.to.fisher_millions.max*1e6
+
+GVA.revenue.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) GVA.revenue.MC[[m]]=Value.to.fisher_millions.MC[[m]]*1e6
+
 
 #10.2 Total number of vessels in TDGDLF
 N.vessels=sum(TDGDLF.vessels$Freq)
 
 #10.3 Overall costs  
-Avg.ves.annual.ktch=mean(Total.ktch.per.boat$Tot)
+Avg.ves.annual.ktch=mean(Total.ktch.per.boat%>%filter(Tot>1000)%>%pull(Tot))
 Kst.question=str_extract_all(Survey.fishers$Q.16, "[[:digit:]]+")
 names(Kst.question)=Survey.fishers$Q.4
 Kst.question=Kst.question[!is.na(Kst.question)]
@@ -9218,67 +9557,179 @@ Kst.question=Kst.question%>%
   filter(!is.na(Tot))%>%
   mutate(Avg.ves.annual.ktch=Avg.ves.annual.ktch,
          Min.scaled=Min*Avg.ves.annual.ktch/Tot,
-         Max.scaled=Max*Avg.ves.annual.ktch/Tot)
+         Max.scaled=Max*Avg.ves.annual.ktch/Tot)%>%
+  filter(!BoatName=='planjak ii')  #remove from cost estimating as not representative, too few trips
 
-Annual.cost.min=min(Kst.question$Min.scaled,na.rm=T) #min & max annual cost for average vessel
+Annual.cost.min=min(Kst.question$Min.scaled,na.rm=T) #min & max annual cost for average vessel (scaled by the catch)
 Annual.cost.max=max(Kst.question$Max.scaled,na.rm=T)
+
+Annual.cost.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  dummy=Kst.question$Min
+  for(x in 1:length(dummy))dummy[x]=with(Kst.question,runif(1,Min.scaled[x],Max.scaled[x]))
+  Annual.cost.MC[[m]]=mean(dummy)
+}
+  
 
 #10.4 Costs per vessel 
 Kost.props.minus.wage=Survey.fishers[,paste('Q.19',letters[c(1:4,6:11)],sep='.')]
-
 GVA.costs.min=sum(apply(Kost.props.minus.wage,2,mean,na.rm=T)*Annual.cost.min/100)
 GVA.costs.max=sum(apply(Kost.props.minus.wage,2,mean,na.rm=T)*Annual.cost.max/100)
+GVA.costs.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  GVA.costs.MC[[m]]=sum(apply(Kost.props.minus.wage,2,mean,na.rm=T)*Annual.cost.MC[[m]]/100)
+}
 
 #10.5 Taxes per vessel
 GVA.taxes.min=min(c(Survey.fishers$Q.18.a,Survey.fishers$Q.18.b),na.rm=T)
 GVA.taxes.max=max(c(Survey.fishers$Q.18.a,Survey.fishers$Q.18.b),na.rm=T)
+dummy=c(Survey.fishers$Q.18.a,Survey.fishers$Q.18.b)
+dummy=dummy[!is.na(dummy)]
+GVA.taxes.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) GVA.taxes.MC[[m]]=runif(1,min(dummy),max(dummy))
+
+
 
 #10.6 Wages per vessel
 GVA.wages.min=mean(Survey.fishers$Q.19.e,na.rm=T)*Annual.cost.min/100
 GVA.wages.max=mean(Survey.fishers$Q.19.e,na.rm=T)*Annual.cost.max/100
+dummy=Survey.fishers$Q.19.e
+dummy=dummy[!is.na(dummy)]
+GVA.wages.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) GVA.wages.MC[[m]]=runif(1,min(dummy),max(dummy))*Annual.cost.MC[[m]]/100
+
 
 
 #10.7 Total GVA
-GVA.fn=function(Fishery.revenue,Costs.per.vsl,Tax.per.vsl,Wage.per.vsl,N.ves)
+GVA.fn=function(Fishery.revenue,Costs.per.vsl,N.ves)
 {
-  GVA=Fishery.revenue - Costs.per.vsl*N.ves + Tax.per.vsl*N.ves + Wage.per.vsl*N.ves
+  GVA=Fishery.revenue - Costs.per.vsl*N.ves 
   return(GVA/1e6)
 }
-
 GVA.min=GVA.fn(Fishery.revenue=GVA.revenue.min,
                Costs.per.vsl=GVA.costs.min,
-               Tax.per.vsl=GVA.taxes.min,
-               Wage.per.vsl=GVA.wages.min,
                N.ves=N.vessels)
 GVA.max=GVA.fn(Fishery.revenue=GVA.revenue.max,
                Costs.per.vsl=GVA.costs.max,
-               Tax.per.vsl=GVA.taxes.max,
-               Wage.per.vsl=GVA.wages.max,
                N.ves=N.vessels)
-
+GVA.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  GVA.MC[[m]]=GVA.fn(Fishery.revenue=GVA.revenue.MC[[m]],
+                     Costs.per.vsl=GVA.costs.MC[[m]],
+                     N.ves=N.vessels)
+}
+Value=unlist(GVA.MC)
+Median=median(Value)
+CI.low=quantile(Value, probs=0.025,na.rm = TRUE)
+CI.up=quantile(Value, probs=0.975,na.rm = TRUE)
 write.csv(data.frame(Range=c('Min','Max'),
-                     GVA=round(c(GVA.min,GVA.max)),
-                     Units='AUD.million'),
+                     GVA=round(c(GVA.min,GVA.max),2),
+                     Units='AUD.million')%>%
+                      mutate(CI_lower=round(CI.low,1),
+                             Median=round(Median,1),
+                             CI_upper=round(CI.up,1),
+                             Delta.CV=round(Median-CI_lower,1)),
           le.paste("Socio-economics/Fishery.value_GVA.csv"),row.names = F)
 
-  
+
+ #Fisher income
+Min.income=4e4
+Fishr.income=function(Annual.revenue,Annual.cost,Annual.tax,Annual.wages)  
+{
+  return(Annual.revenue-Annual.cost-Annual.tax-Annual.wages)
+}
+Fisher.annual.income.MC=vector('list',MC.sims)
+for(m in 1:MC.sims)
+{
+  xx=Fishr.income(Annual.revenue=GVA.revenue.MC[[m]]/N.vessels,
+                  Annual.cost=GVA.costs.MC[[m]],
+                  Annual.tax=GVA.taxes.MC[[m]],
+                  Annual.wages=GVA.wages.MC[[m]]) 
+  if(xx>Min.income)Fisher.annual.income.MC[[m]]=xx
+}
+Fisher.annual.income.MC=compact(Fisher.annual.income.MC) 
+
+Value=unlist(Fisher.annual.income.MC)
+Median=median(Value)
+CI.low=quantile(Value, probs=0.025,na.rm = TRUE)
+CI.up=quantile(Value, probs=0.975,na.rm = TRUE)
+write.csv(data.frame(Sector='Fisher')%>%
+                      mutate(CI_lower=round(CI.low,1),
+                             Median=round(Median,1),
+                             CI_upper=round(CI.up,1),
+                             Delta.CV=round(Median-CI_lower,1)),
+          le.paste("Socio-economics/Fisher.income.csv"),row.names = F)
+
+
+
 
 #11. Fishery valuation - Employment
+
+#Fisher
 FTE_fisher.min=min(Survey.fishers$Q.7,na.rm=T)
 FTE_fisher.max=max(Survey.fishers$Q.7,na.rm=T)
+dummy=Survey.fishers$Q.7
+dummy=dummy[!is.na(dummy)]
+FTE_fisher.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) FTE_fisher.MC[[m]]=runif(1,min(dummy),max(dummy))
+
 Total.employees_fisher.min=min(Survey.fishers$Q.8,na.rm=T)
 Total.employees_fisher.max=max(Survey.fishers$Q.8,na.rm=T)
+dummy=Survey.fishers$Q.8
+dummy=dummy[!is.na(dummy)]
+Total.employees_fisher.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) Total.employees_fisher.MC[[m]]=runif(1,min(dummy),max(dummy))
 
+#Processor
 FTE_proc.min=min(Survey.processor$Q.3,na.rm=T)
 FTE_proc.max=max(Survey.processor$Q.3,na.rm=T)
+dummy=Survey.processor$Q.3
+dummy=dummy[!is.na(dummy)]
+FTE_proc.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) FTE_proc.MC[[m]]=runif(1,min(dummy),max(dummy))
+
 Total.employees_proc.min=min(Survey.processor$Q.4,na.rm=T)
 Total.employees_proc.max=max(Survey.processor$Q.4,na.rm=T)
+dummy=Survey.processor$Q.4
+dummy=dummy[!is.na(dummy)]
+Total.employees_proc.MC=vector('list',MC.sims)
+for(m in 1:MC.sims) Total.employees_proc.MC[[m]]=runif(1,min(dummy),max(dummy))
+
+#total FTE and total employees across fishery
+Total.employees_fishery.MC=Total.FTE_fishery.MC=Total.employees_fisher.MC
+for(m in 1:MC.sims)
+{
+  Total.FTE_fishery.MC[[m]]=FTE_fisher.MC[[m]]*N.vessels
+  Total.employees_fishery.MC[[m]]=Total.employees_fisher.MC[[m]]*N.vessels
+}
+Value=unlist(Total.employees_fishery.MC)
+Median_emp=median(Value)
+CI.low_emp=quantile(Value, probs=0.025,na.rm = TRUE)
+CI.up_emp=quantile(Value, probs=0.975,na.rm = TRUE)
+
+  
+Value=unlist(Total.FTE_fishery.MC)
+Median_FTE=median(Value)
+CI.low_FTE=quantile(Value, probs=0.025,na.rm = TRUE)
+CI.up_FTE=quantile(Value, probs=0.975,na.rm = TRUE)
+
 
 write.csv(data.frame(Sector=c('Fisher','Processor'),
-                     FTE.min=round(c(FTE_fisher.min,FTE_proc.min)),
-                     FTE.max=round(c(FTE_fisher.max,FTE_proc.max)),
-                     All.min=round(c(Total.employees_fisher.min,Total.employees_proc.min)),
-                     All.max=round(c(Total.employees_fisher.max,Total.employees_proc.max))),
+                     Average_FTE.min=round(c(FTE_fisher.min,FTE_proc.min)),
+                     Average_FTE.max=round(c(FTE_fisher.max,FTE_proc.max)),
+                     Average_All.min=round(c(Total.employees_fisher.min,Total.employees_proc.min)),
+                     Average_All.max=round(c(Total.employees_fisher.max,Total.employees_proc.max)))%>%
+            mutate(CI_lower_FTE=c(round(CI.low_FTE,1),NA),    #for processors, I need the total number of processors
+                   Median_FTE=c(round(Median_FTE,1),NA),
+                   CI_upper_FTE=c(round(CI.up_FTE,1),NA),
+                   Delta.CV_FTE=c(round(Median_FTE-CI_lower_FTE,1)),
+                   CI_lower_emp=c(round(CI.low_emp,1),NA),    
+                   Median_emp=c(round(Median_emp,1),NA),
+                   CI_upper_emp=c(round(CI.up_emp,1),NA),
+                   Delta.CV_emp=c(round(Median_emp-CI_lower_emp,1))),
           le.paste("Socio-economics/Employees.csv"),row.names = F)
 
 
@@ -9373,7 +9824,38 @@ if(Do.map.location)
   
 }
 
+#15. Compare Survey reply and catch * price
+Compare.survey.VS.reported=Survey.fishers[,c('Q.2','Q.11')]%>%
+  filter(!is.na(Q.11))%>%
+  mutate(Revenue.survey.min=as.numeric(read.table(text = Q.11, fill = TRUE)[[1]]),
+         Revenue.survey.max=read.table(text = Q.11, fill = TRUE)[[3]],
+         Revenue.survey.max=ifelse(Revenue.survey.max=="more",NA,Revenue.survey.max),
+         Revenue.survey.max=as.numeric(Revenue.survey.max))%>%
+  filter(!Q.2%in%c("Gregory Sharp","Nils Stokke"))  #no vessel name currently or no catch (Nils) so cannot track catch
 
+
+Average.revenue.per.landed.kg=Avrg.ktch%>%mutate(Species=COMMON_NAME,   #note: using average catch across fleet, not vessel-specific catch hence discrepancies
+                                                 Species=case_when(
+                                                   !COMMON_NAME%in%c("Gummy shark","Dusky shark",
+                                                                     "Whiskery shark","Sandbar shark") & SPECIES<40000~"Other sharks and rays",
+                                                   !COMMON_NAME%in%c("Snapper","Dhufish","Queen snapper","Blue groper") & SPECIES>40000~"Other scalefish",
+                                                   TRUE~Species),
+                                                 Species=ifelse(SPECIES==22998,'Shark fins',Species))%>%
+  left_join(Fisher.price,by='Species')%>%
+  mutate(Mean.price=(Min+Max)/2,
+         Revenue=Avg.annual.landed_kg*Mean.price)
+Average.revenue.per.landed.kg=sum(Average.revenue.per.landed.kg$Revenue)/sum(Average.revenue.per.landed.kg$Avg.annual.landed_kg)
+
+Compare.survey.VS.reported=Compare.survey.VS.reported%>%
+  left_join(data.frame(Q.2=c("Jeff Cooke","Markus Branderhorst",
+                             "Michael Tonkin","Michael Tonkin","Peter Warrilow",
+                             "Steve McWhirter","Storm Manstead"),
+                       BoatName=c("tracey lea","marrabundi",
+                                  "doreen","st gerard m","planjak ii",
+                                  "elizabeth maria ii","fatal attraction"))%>%
+              left_join(Total.ktch.per.boat,by='BoatName')%>%
+              mutate(Average.annual.revenue=Average.revenue.per.landed.kg*Tot),
+            by='Q.2')
 
 #---------Analyse PA economics of Longline vs Gillnet ------------
 
@@ -9475,7 +9957,7 @@ Cost_crew_GN=crew.cost(an.crew.kst=Annual.cost.crew_GN,
   
   #2.4. gear repair costs to catch one tonne   
 Annual.cost.gear.rep_GN=mean(Survey.fishers$Q.19.c,na.rm=T)*Annual.cost.GN/100
-Annual.cost.gear.rep_LL_MB=5000  # Markus Branderhorst survey  ACA
+Annual.cost.gear.rep_LL_MB=5000  # Markus Branderhorst survey  
 Annual.cost.gear.rep_LL=Annual.cost.gear.rep_LL_MB *(Avg.ves.annual.ktch/Total.ktch.per.boat%>%     #for average vessel
                                                        filter(BoatName=='marrabundi')%>%pull(Tot))
 
