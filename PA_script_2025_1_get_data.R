@@ -119,6 +119,14 @@ for(d in 1:length(Data.set))
               left_join(dummy2%>%dplyr::select(Gridset,AreaCode,Latitude,Longitude),by=c('Gridset','AreaCode'))
     Data.set[[d]]=list(Vic=dummy)
   }
+  if(names(Data.set)[d]=="NT")
+  {
+    dummy=Data.set[[d]]$logbook_shark_location%>%
+                            rename(Latitude=E_decimal_lat,
+                                   Longitude=E_decimal_long,
+                                   Species=C_standard_name)
+    Data.set[[d]]=list(NT=dummy)
+  }
 }
 
 #reset colnames
@@ -167,6 +175,7 @@ for(d in 1:length(Data.set))
       if(names(Data.set)[d]=="SA") Data.set[[d]][[i]]$Fishery='MSF'
       if(names(Data.set)[d]=="Vic") Data.set[[d]][[i]]$Fishery='Vic'
       if(names(Data.set)[d]=="WA") Data.set[[d]][[i]]$Fishery=Data.set[[d]][[i]]$Method
+      if(names(Data.set)[d]=="NT") Data.set[[d]][[i]]$Fishery='NT'
     }
     
     if(!"Species"%in%colnames(Data.set[[d]][[i]]))

@@ -34,6 +34,7 @@ Opportunistic <- read_excel(handl_OneDrive("Parks Australia/2022_project/Data/DN
 IUCN=read.csv(handl_OneDrive("Parks Australia/2022_project/Data/DNA barcoding/status.csv"))
 Shop.location=read.csv(handl_OneDrive("Parks Australia/2022_project/Data/DNA barcoding/Shop location.csv"))
 Origin.all.sequenced.species=read.csv(handl_OneDrive("Parks Australia/2022_project/Data/DNA barcoding/All.sequenced.species.csv"))
+area.postcode=read.csv(handl_OneDrive("Parks Australia/2022_project/Data/DNA barcoding/area.postcode.csv"))
 
 # Manipulate data --------------------------------------------------------------------
 Original.Sampling=Original.Sampling%>%
@@ -87,6 +88,29 @@ Original.Sampling=Original.Sampling%>%filter(!label_number%in%drop.samples)
 drop.samples=c("S008","S025i","S065ii")
 Resample.Metro=Resample.Metro%>%filter(!label_number%in%drop.samples)
 
+#Manually fix price adding chips for 'fish only' cases
+Original.Sampling=Original.Sampling%>%
+  mutate(price1=price)
+
+mean.chips=round(mean(c(3,2,2,3.5,3.5,5,3,3.5,4,4,4,5,5,5,3,3,3,3,3,4.5,2)))
+#Opportunistic%>%filter(grepl('fish only',tolower(comment)))%>%select(serial,price,comment)
+Opportunistic=Opportunistic%>%
+  mutate(price1=case_when(grepl('no chips',tolower(comment))~price+mean.chips,
+                          serial%in%c(5,21) ~ price+3,
+                          serial%in%c(7,10) ~ price+2,
+                          serial%in%c(16,17,24) ~ price+3.5,
+                          serial%in%c(19) ~ price+5,
+                          TRUE~price))
+
+#Resample.Metro%>%filter(grepl('fish only',tolower(comment)))%>%select(serial,price,comment)
+Resample.Metro=Resample.Metro%>%
+  mutate(price1=case_when(grepl('no chips',tolower(comment))~price+mean.chips,
+                          serial%in%c(26) ~ price+2,
+                          serial%in%c(11,14,16,57,58) ~ price+3,
+                          serial%in%c(1,59,39) ~ price+4,
+                          serial%in%c(25) ~ price+4.5,
+                          serial%in%c(3,31,32) ~ price+5,
+                          TRUE~price))
 
 DATA=rbind(Original.Sampling,Resample.Metro,Opportunistic)%>%
   mutate(year=year(sample_date),
@@ -134,6 +158,12 @@ DATA=rbind(Original.Sampling,Resample.Metro,Opportunistic)%>%
          Common_name_sequenced=trimws(word(original_species_after_sequencing,sep = "\\(")),
          Scientific_name_sequenced=stringr::str_extract(string = original_species_after_sequencing,pattern = "(?<=\\().*(?=\\))"))
 
+DATA=DATA%>%mutate(post_code=case_when(area== 'Albany' ~ 6333,
+                                       area== 'Beechboro' ~ 6063,
+                                       area== 'Mandurah' ~ 6210,
+                                       area== 'Morley' ~ 6062,
+                                       area== 'Rockingham' ~ 6168,
+                                       TRUE~post_code))
 #Add IUCN status
 RiskColors=c("Not evaluated"="grey85",'Negligible risk'="cornflowerblue",'Low risk'="chartreuse3",
              'Medium risk'="yellow1",'High risk'="orange",'Severe risk'="brown3")
@@ -683,3 +713,241 @@ write.csv(Tab1%>%
 write.csv(dummy%>%dplyr::select(report_label,advertised_product_origin,Common_name_sequenced,Distribution,
                                 Mismatch_label_DNA_origin)%>%arrange(report_label,Common_name_sequenced),
           le.paste("Table_Mismatch.advertised_origin_raw.csv"),row.names = F)
+
+
+#Testing patterns in mismatches and umbiguous labelling
+dd=DATA%>%
+  mutate(Match_label_DNA_mislabelling=as.factor(Match_label_DNA_mislabelling),
+         Ambiguous.labelling=as.factor(Ambiguous.labelling),
+         Match_label_DNA_mislabelling_fraud=case_when(Match_label_DNA_mislabelling=='Yes' & 
+                                                        grepl(paste(c('bronze','bronzey','bronzy'),collapse='|'),advertised_product_label) & 
+                                                        grepl(paste(c('gummy','whiskery'),collapse = '|'),Common_name_sequenced) ~ 'No',
+                                                      Match_label_DNA_mislabelling=='Yes' & 
+                                                        grepl(paste(c('gummy'),collapse='|'),advertised_product_label) & 
+                                                        grepl(paste(c('whiskery','dusky'),collapse = '|'),Common_name_sequenced) ~ 'No',
+                                                      Match_label_DNA_mislabelling=='Yes' & 
+                                                        grepl(paste(c('whiskery'),collapse='|'),advertised_product_label) & 
+                                                        grepl(paste(c('gummy'),collapse = '|'),Common_name_sequenced) ~ 'No',
+                                                      TRUE~Match_label_DNA_mislabelling))%>%
+  filter(!is.na(price1))%>%
+  left_join(area.postcode,by=c('area','post_code'))%>%
+  left_join(Shop.location,by=c('shop','area','post_code'))
+
+    #Exploratory analysis
+fun.dat.explore=function(wdata)
+{
+  #Map
+  wdata%>%
+    mutate(Ambiguous.labelling=paste('Ambiguous label:',Ambiguous.labelling))%>%
+    group_by(area,Latitude_suburb,Longitude_suburb,Match_label_DNA_mislabelling_fraud,Ambiguous.labelling)%>%
+    summarise(Mean=mean(price1))%>%
+    ggplot(aes(Longitude_suburb,Latitude_suburb,color=Match_label_DNA_mislabelling_fraud))+
+    geom_jitter()+
+    facet_wrap(~Ambiguous.labelling,ncol=1)+
+    theme_bw()+theme(legend.position = 'top')+
+    guides(color=guide_legend(title="Mislabelling fraud"))+
+    scale_color_manual(values=Mislabelling.col.vec)+
+    ggrepel::geom_text_repel(aes(x=Longitude_suburb,y=Latitude_suburb,label=area),show.legend = F)
+  ggsave(le.paste("Exploratory/Price map.tiff"),width = 6,height = 6,compression = "lzw")
+  
+  #Interaction
+  wdata%>%
+    mutate(Ambiguous.labelling=paste('Ambiguous label:',Ambiguous.labelling))%>%
+    ggplot(aes(Median.house.price,price1,color=Match_label_DNA_mislabelling_fraud))+
+    geom_point()+
+    facet_wrap(~Ambiguous.labelling,ncol=1)+theme_bw()+theme(legend.position = 'top')+
+    guides(color=guide_legend(title="Mislabelling fraud"))+ylab('AUD')+
+    geom_smooth(method = "lm")+
+    scale_color_manual(values=Mislabelling.col.vec)
+  ggsave(le.paste("Exploratory/Price by median house price.tiff"),width = 6,height = 6,compression = "lzw")
+  
+  #Density distributions and histograms
+  p1=ggdensity(wdata, x = "price1",
+               add = "mean", rug = TRUE,
+               fill = "Ambiguous.labelling",
+               palette = c("#00AFBB", "#E7B800"))+xlab('AUD')
+  p2=ggdensity(wdata, x = "price1",
+               add = "mean", rug = TRUE,
+               fill = "Match_label_DNA_mislabelling_fraud",
+               palette = c("#00AFBB", "#E7B800"))+xlab('AUD')+
+    guides(fill=guide_legend(title="Mislabelling fraud"))
+  
+  p3=gghistogram(wdata, x = "price1",
+                 add = "mean", rug = TRUE,
+                 fill = "Ambiguous.labelling",
+                 palette = c("#00AFBB", "#E7B800"))+xlab('AUD')+
+    theme(legend.position = 'none')
+  p4=gghistogram(wdata, x = "price1",
+                 add = "mean", rug = TRUE,
+                 fill = "Match_label_DNA_mislabelling_fraud",
+                 palette = c("#00AFBB", "#E7B800"))+xlab('AUD')+
+    theme(legend.position = 'none')
+  
+  ggarrange(p1,p2,p3,p4,ncol=2,nrow=2)
+  ggsave(le.paste("Exploratory/Price by labelling_distribution.tiff"),width = 9,height = 6,compression = "lzw")
+  
+  
+  #Box and violin plots Match_label_DNA_mislabelling_fraud
+  my_comparisons <- list( c("No", "Yes"))
+  p1=wdata%>%
+    ggplot(aes(x=Ambiguous.labelling,y=price1,fill=Ambiguous.labelling))+
+    geom_violin(show.legend = F)+
+    geom_boxplot(fill='white')+
+    geom_jitter(show.legend = F,width=0.1, height=0.1)+
+    stat_compare_means(comparisons = my_comparisons, label = "p.signif")+ # Add significance levels
+    stat_compare_means(label.y = 28)+ylab('AUD')+
+    scale_fill_manual(values=c("#00AFBB", "#E7B800"))
+  
+  p2=wdata%>%
+    ggplot(aes(x=Match_label_DNA_mislabelling_fraud,y=price1,fill=Match_label_DNA_mislabelling_fraud))+
+    geom_violin(show.legend = F)+
+    geom_boxplot(fill='white')+
+    geom_jitter(show.legend = F,width=0.1, height=0.1)+
+    stat_compare_means(comparisons = my_comparisons, label = "p.signif")+ # Add significance levels
+    stat_compare_means(label.y = 28)+ylab('AUD')+xlab('Mislabelling fraud')
+  scale_fill_manual(values=c("#00AFBB", "#E7B800"))
+  ggarrange(p1,p2,ncol=1,nrow=2)
+  ggsave(le.paste("Exploratory/Price by labelling_violin.tiff"),width = 6,height = 6,compression = "lzw")
+  
+  #Lollipop chart
+  p1=ggdotchart(wdata, x = "area", y = "price1",
+                color = "Ambiguous.labelling",                                # Color by groups
+                palette = c("#00AFBB", "#E7B800"), # Custom color palette
+                sorting = "descending",                       # Sort value in descending order
+                add = "segments",                             # Add segments from y = 0 to dots
+                rotate = TRUE,                                # Rotate vertically
+                group = "Ambiguous.labelling",                                # Order by groups
+                dot.size = 3,                                 # Large dot size
+                font.label = list(color = "white", size = 7, 
+                                  vjust = 0.5),               # Adjust label parameters
+                ggtheme = theme_pubr())+                        # ggplot2 theme
+    theme(axis.text.y = element_text(size=10))+ylab('AUD')
+  p2=wdata%>%
+    rename("Mislabelling fraud"="Match_label_DNA_mislabelling_fraud")%>%
+    ggdotchart(x = "area", y = "price1",
+               color = "Mislabelling fraud",                                # Color by groups
+               palette = c("#00AFBB", "#E7B800"), # Custom color palette
+               sorting = "descending",                       # Sort value in descending order
+               add = "segments",                             # Add segments from y = 0 to dots
+               rotate = TRUE,                                # Rotate vertically
+               group = "Mislabelling fraud",                                # Order by groups
+               dot.size = 3,                                 # Large dot size
+               font.label = list(color = "white", size = 7, 
+                                 vjust = 0.5),               # Adjust label parameters
+               ggtheme = theme_pubr())+                        # ggplot2 theme
+    theme(axis.text.y = element_text(size=10))+ylab('AUD')
+  ggarrange(p1,p2,ncol=2,nrow=1)
+  ggsave(le.paste("Exploratory/Price by labelling_lollipop.tiff"),width = 7,height = 10,compression = "lzw")
+}
+fun.dat.explore(wdata=dd)
+
+mod <- glm(price1~Match_label_DNA_mislabelling_fraud+Ambiguous.labelling + Median.house.price+Coastal.town,
+           data = dd, family = 'gaussian')
+
+summary(mod)
+anova(mod,test="Chisq")
+
+Median.house.range=dd%>%
+  group_by(Coastal.town,Ambiguous.labelling,Match_label_DNA_mislabelling_fraud)%>%
+  summarise(min=min(Median.house.price),
+            max=max(Median.house.price))%>%
+  spread()
+
+fn.pred=function(Mod,newdata)
+{
+  pred=predict(Mod,newdata = newdata, se.fit = TRUE, type='response')
+  newdata=newdata%>%
+    mutate(price.pred=pred$fit,
+           upper=pred$fit + 1.96 * pred$se.fit,
+           lower=pred$fit - 1.96 * pred$se.fit)
+  
+  return(newdata)
+}
+newdata=fn.pred(Mod=mod,
+        newdata=with(dd,
+                     expand.grid(Median.house.price = seq(3.5e5,2.5e6,5e4),
+                                 Coastal.town=unique(Coastal.town),
+                                 Ambiguous.labelling=unique(Ambiguous.labelling),
+                                 Match_label_DNA_mislabelling_fraud = unique(Match_label_DNA_mislabelling_fraud)))%>%
+          mutate(drop=ifelse(Coastal.town=='Yes' & Median.house.price>9e5,'yes','no'))%>%
+          filter(drop=='no')%>%dplyr::select(-drop))
+
+#Main effects
+p1=newdata%>%
+  filter(Coastal.town=='No'& Ambiguous.labelling=='No' & Match_label_DNA_mislabelling_fraud=='No')%>%
+  ggplot(aes(Median.house.price,price.pred))+
+  geom_ribbon(aes(ymin=lower, ymax=upper), linetype=2, alpha=0.1,show.legend = F,fill="forestgreen")+
+  geom_line(color="forestgreen")+
+  theme_bw()+theme(legend.position = 'top')+
+  ylab('')+xlab('')+
+  scale_x_continuous(labels = scales::dollar_format())+
+  theme_bw()+
+  theme(legend.position = 'top',
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 9),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.margin = unit(c(0,0,0,0), 'lines'))
+
+Median.price=newdata%>%group_by(Coastal.town)%>%summarise(Med=median(Median.house.price))
+
+p2=newdata%>%
+  filter(Median.house.price%in%
+           c(newdata$Median.house.price[which.min(abs(newdata$Median.house.price - Median.price$Med[1]))],
+             newdata$Median.house.price[which.min(abs(newdata$Median.house.price - Median.price$Med[2]))]))%>%
+  mutate(Median.house.price = scales::dollar(Median.house.price, largest_with_cents = 0))
+
+p2=p2%>%
+  mutate(
+    Median.house.price=factor(Median.house.price,levels=sort(unique(p2$Median.house.price))),
+    Coastal.town=paste('Coastal town:',Coastal.town),
+    Ambiguous.labelling=paste('Ambiguous label:',Ambiguous.labelling))%>%
+  ggplot(aes(Median.house.price,price.pred,color=Match_label_DNA_mislabelling_fraud))+
+  geom_errorbar(aes(ymin = lower, ymax = upper, colour = Match_label_DNA_mislabelling_fraud), 
+                width = 0.25, size = 1, position = position_dodge(width = 0.4)) +
+  geom_point(size=3,position = position_dodge(width = 0.4))+
+  facet_grid(Coastal.town~Ambiguous.labelling)+
+  theme_bw()+theme(legend.position = 'top')+
+  guides(color=guide_legend(title="Mislabelling fraud"))+ylab('')+xlab('')+
+  scale_color_manual(values=Mislabelling.col.vec)+
+  theme_bw()+
+  theme(legend.position = 'top',
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 9),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.margin = unit(c(0,0,0,0), 'lines'))
+
+figure=ggarrange(p1,p2,ncol=1,heights=c(0.7,1))
+annotate_figure(figure,
+         bottom = text_grob("Median house price (AUD)",  size = 13),
+         left = text_grob("Price (AUD)", size = 13, rot = 90))
+ggsave(le.paste("Predictions.tiff"),width = 6,height = 6,compression = "lzw")
+
+
+#interactions
+newdata%>%
+  mutate(Coastal.town=paste('Coastal town:',Coastal.town),
+         Ambiguous.labelling=paste('Ambiguous label:',Ambiguous.labelling))%>%
+  ggplot(aes(Median.house.price,price.pred,color=Match_label_DNA_mislabelling_fraud))+
+  geom_ribbon(aes(ymin=lower, ymax=upper,fill=Match_label_DNA_mislabelling_fraud), linetype=2, alpha=0.1,show.legend = F)+
+  geom_line()+
+  facet_grid(Coastal.town~Ambiguous.labelling)+
+  theme_bw()+theme(legend.position = 'top')+
+  guides(color=guide_legend(title="Mislabelling fraud"))+ylab('Price (AUD)')+xlab('Median house price (AUD)')+
+  scale_color_manual(values=Mislabelling.col.vec)+
+  scale_fill_manual(values=Mislabelling.col.vec)+
+  scale_x_continuous(labels = scales::dollar_format())+
+  theme_bw()+
+  theme(legend.position = 'top',
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 9),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+ggsave(le.paste("Predictions_interaction.tiff"),width = 8,height = 6,compression = "lzw")
