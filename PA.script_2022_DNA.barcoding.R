@@ -25,6 +25,7 @@ library(ggpubr)
 library(grid)   # for the textGrob() function
 library(gridExtra) 
 library(ggsankey)
+library(stargazer)
 options(stringsAsFactors = FALSE,dplyr.summarise.inform = FALSE) 
 
 # Input data --------------------------------------------------------------------
@@ -841,12 +842,34 @@ fun.dat.explore=function(wdata)
 }
 fun.dat.explore(wdata=dd)
 
+  #run glm
 mod <- glm(price1~Match_label_DNA_mislabelling_fraud+Ambiguous.labelling + Median.house.price+Coastal.town,
            data = dd, family = 'gaussian')
 
-summary(mod)
-anova(mod,test="Chisq")
+  #Deviance explained by term
+fun.percent.dev.exp=function(null,modl) 100*(abs(null-modl))/null
+mod_mislabelling_fraud <- glm(price1~Match_label_DNA_mislabelling_fraud,data = dd, family = 'gaussian')
+mod_Ambiguous.labelling <- glm(price1~Ambiguous.labelling,data = dd, family = 'gaussian')
+mod_Median.house.price <- glm(price1~Median.house.price,data = dd, family = 'gaussian')
+mod_Coastal.town <- glm(price1~Coastal.town,data = dd, family = 'gaussian')
+Percen.dev.exp.mod_mislabelling_fraud=with(mod_mislabelling_fraud,fun.percent.dev.exp(null.deviance,deviance))
+Percen.dev.exp.mod_Ambiguous.labelling=with(mod_Ambiguous.labelling,fun.percent.dev.exp(null.deviance,deviance))
+Percen.dev.exp.mod_Median.house.price=with(mod_Median.house.price,fun.percent.dev.exp(null.deviance,deviance))
+Percen.dev.exp.mod_Coastal.town=with(mod_Coastal.town,fun.percent.dev.exp(null.deviance,deviance))
 
+  #model summary and anova
+mod.summary=summary(mod)
+stargazer(mod, title = as.character(mod.summary[1]$call)[2], style = "default", out = le.paste("model summary.txt") , type = "text")
+write.csv(as.data.frame(mod.summary$coefficients),le.paste("model summary.csv"),row.names = T)
+anova.out=as.data.frame(anova(mod,test="Chisq"))%>%
+          filter(!is.na(Df))%>%
+          mutate(Percent.deviance.explained=c(Percen.dev.exp.mod_mislabelling_fraud,Percen.dev.exp.mod_Ambiguous.labelling,
+                                      Percen.dev.exp.mod_Median.house.price,Percen.dev.exp.mod_Coastal.town))
+write.csv(anova.out,le.paste("model anova.csv"),row.names = T)
+
+
+
+  #predictions
 Median.house.range=dd%>%
   group_by(Coastal.town,Ambiguous.labelling,Match_label_DNA_mislabelling_fraud)%>%
   summarise(min=min(Median.house.price),
@@ -874,10 +897,14 @@ newdata=fn.pred(Mod=mod,
 
 #Main effects
 p1=newdata%>%
-  filter(Coastal.town=='No'& Ambiguous.labelling=='No' & Match_label_DNA_mislabelling_fraud=='No')%>%
-  ggplot(aes(Median.house.price,price.pred))+
-  geom_ribbon(aes(ymin=lower, ymax=upper), linetype=2, alpha=0.1,show.legend = F,fill="forestgreen")+
-  geom_line(color="forestgreen")+
+  filter(Coastal.town=='No'& Ambiguous.labelling=='No')%>%
+  ggplot(aes(Median.house.price,price.pred,color=Match_label_DNA_mislabelling_fraud))+
+  geom_ribbon(aes(ymin=lower, ymax=upper,fill=Match_label_DNA_mislabelling_fraud), linetype=2, alpha=0.1,show.legend = F)+
+  geom_line(show.legend = F)+
+  scale_color_manual(values=Mislabelling.col.vec)+
+  scale_fill_manual(values=Mislabelling.col.vec)+
+  #geom_ribbon(aes(ymin=lower, ymax=upper), linetype=2, alpha=0.1,show.legend = F,fill="forestgreen")+
+  #geom_line(color="forestgreen")+
   theme_bw()+theme(legend.position = 'top')+
   ylab('')+xlab('')+
   scale_x_continuous(labels = scales::dollar_format())+
@@ -889,7 +916,7 @@ p1=newdata%>%
         axis.text = element_text(size = 9),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        plot.margin = unit(c(0,0,0,0), 'lines'))
+        plot.margin = unit(c(0.1,0.5,0,0), 'lines'))
 
 Median.price=newdata%>%group_by(Coastal.town)%>%summarise(Med=median(Median.house.price))
 
@@ -897,7 +924,8 @@ p2=newdata%>%
   filter(Median.house.price%in%
            c(newdata$Median.house.price[which.min(abs(newdata$Median.house.price - Median.price$Med[1]))],
              newdata$Median.house.price[which.min(abs(newdata$Median.house.price - Median.price$Med[2]))]))%>%
-  mutate(Median.house.price = scales::dollar(Median.house.price, largest_with_cents = 0))
+  mutate(Median.house.price = scales::dollar(Median.house.price, largest_with_cents = 0),
+         Median.house.price=factor(Median.house.price,levels=unique(Median.house.price)))
 
 p2=p2%>%
   mutate(
@@ -905,9 +933,10 @@ p2=p2%>%
     Coastal.town=paste('Coastal town:',Coastal.town),
     Ambiguous.labelling=paste('Ambiguous label:',Ambiguous.labelling))%>%
   ggplot(aes(Median.house.price,price.pred,color=Match_label_DNA_mislabelling_fraud))+
+  geom_hline(yintercept=mean(dd$price1), linetype = "dashed",alpha=0.5)+
   geom_errorbar(aes(ymin = lower, ymax = upper, colour = Match_label_DNA_mislabelling_fraud), 
-                width = 0.25, size = 1, position = position_dodge(width = 0.4)) +
-  geom_point(size=3,position = position_dodge(width = 0.4))+
+                width = 0.1, size = .5, position = position_dodge(width = 0.4)) +
+  geom_point(size=1.75,position = position_dodge(width = 0.4))+
   facet_grid(Coastal.town~Ambiguous.labelling)+
   theme_bw()+theme(legend.position = 'top')+
   guides(color=guide_legend(title="Mislabelling fraud"))+ylab('')+xlab('')+
@@ -924,8 +953,8 @@ p2=p2%>%
 
 figure=ggarrange(p1,p2,ncol=1,heights=c(0.7,1))
 annotate_figure(figure,
-         bottom = text_grob("Median house price (AUD)",  size = 13),
-         left = text_grob("Price (AUD)", size = 13, rot = 90))
+         bottom = text_grob("Median house price (AUD)",  size = 13,vjust = -1),
+         left = text_grob("Price (AUD)", size = 13, rot = 90,vjust = 2))
 ggsave(le.paste("Predictions.tiff"),width = 6,height = 6,compression = "lzw")
 
 
