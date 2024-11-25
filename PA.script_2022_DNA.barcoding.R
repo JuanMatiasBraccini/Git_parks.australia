@@ -270,11 +270,11 @@ DATA=DATA%>%
                                 ifelse(shop=="cicerellos",'NO',   #2 different shops same name
                                 Replicate.sample))))
 
-# Analysis ----------------------------------------------------------------
+# Plot mislabeling   ----------------------------------------------------------------
 HNDL=handl_OneDrive('Analyses/Parks Australia/outputs/2022 Project/')
 le.paste=function(x) paste(HNDL,x,sep='')
 
-#Plot mislabeling    
+  
 Tab1=DATA%>%
   mutate(report_label=capitalize(report_label),
          Ambiguous.labelling=ifelse(Ambiguous.labelling=='Yes','Ambiguous','Unambiguous'))%>%
@@ -308,7 +308,7 @@ Tab1%>%
 ggsave(le.paste("Mislabelling_ambiguous.tiff"),width = 9,height = 7,compression = "lzw")
 
 
-#Plot Sankey Label and Sequenced
+# Plot Sankey Label and Sequenced  ----------------------------------------------------------------
 write.csv(DATA[,c('report_label','Common_name_sequenced')]%>%arrange(report_label,Common_name_sequenced),
           le.paste("Table_Sankey_label_sequenced.csv"),row.names = F)
 df <- DATA %>%
@@ -343,7 +343,7 @@ p=ggplot(df, aes(x = x,
 p+scale_fill_manual(values = species_colors)
 ggsave(le.paste("Sankey_label_sequenced.tiff"),width = 6,height = 8,compression = "lzw")
 
-#Plot mismatch origin
+# Plot mismatch origin  ----------------------------------------------------------------
 Tab1=DATA%>%
   filter(!is.na(Mismatch_label_DNA_origin))%>%
   mutate(report_label=capitalize(report_label),
@@ -388,8 +388,7 @@ Tab1%>%
   scale_fill_discrete(name = "Mismatched origin",type=Mislabelling.col.vec)
 ggsave(le.paste("Mismatch.origin_unambiguous.tiff"),width = 9,height = 7,compression = "lzw")
 
-
-#Plot Status
+# Plot Status ----------------------------------------------------------------
 Lgn.tit=12
 Lgn.txt=9
 p_IUCN_Oz=DATA%>%
@@ -465,29 +464,38 @@ annotate_figure(figure,
 ggsave(le.paste("Status.tiff"),width = 8,height = 8,compression = "lzw")
 
 
-#Plot 'do_you_know_what_fish_this_is'
+#IUCN only
+figure=ggarrange(p_IUCN_global+theme(legend.title = element_blank()) + rremove("ylab") + rremove("xlab"),
+          p_IUCN_Oz + rremove("ylab")  + rremove("xlab"),
+          labels = c('Global','Australia'),
+          ncol = 1, nrow = 2,common.legend = TRUE)
+annotate_figure(figure, 
+                left = text_grob("Sequenced species", size=16, rot = 90, vjust = 1),
+                bottom = text_grob("Occurrence", size=16))
+ggsave(le.paste("Status_IUCN_only.tiff"),width = 8,height = 8,compression = "lzw")
+
+# Plot 'do_you_know_what_fish_this_is' ----------------------------------------------------------------
 dummy=DATA%>%
-    filter(Ambiguous.labelling=='Yes')%>%
-    filter(!is.na(do_you_know_what_fish_this_is))%>%
-    filter(!do_you_know_what_fish_this_is=='no')%>%
-    mutate(Match_do.you.know.fish_DNA_mislabelling=case_when(
-        do_you_know_what_fish_this_is=='blacktip shark or reef shark' & Common_name_sequenced=='smooth hammerhead'~"Yes",
-        do_you_know_what_fish_this_is=='bronze whaler' & !grepl(paste(c('dusky','copper'),collapse="|"),Common_name_sequenced) ~"Yes",
-        do_you_know_what_fish_this_is=='cape elephant fish' & !Common_name_sequenced=='cape elephantfish'~"Yes",
-        grepl('flake',do_you_know_what_fish_this_is) & !Common_name_sequenced=="gummy shark"~ "Yes",
-        do_you_know_what_fish_this_is=='gummy or bronzie' & !grepl(paste(c('dusky','copper','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='gummy or mako' & !grepl(paste(c('mako','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='gummy or whiskery' & !grepl(paste(c('whiskery','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='gummy shark' & !grepl(paste(c('gummy'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='hake' & !grepl(paste(c('hake'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='hammerhead' & !grepl(paste(c('hammerhead'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='hoki' & !Common_name_sequenced=='blue grenadier'~"Yes",
-        do_you_know_what_fish_this_is=='shark' & !grepl(paste(c('shark'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='snapper' & !grepl(paste(c('snapper'),collapse="|"),Common_name_sequenced)~"Yes",
-        do_you_know_what_fish_this_is=='whiskery' & !grepl(paste(c('whiskery'),collapse="|"),Common_name_sequenced)~"Yes",
-                                             TRUE~"No"))%>%
-    mutate(do_you_know_what_fish_this_is=capitalize(do_you_know_what_fish_this_is),
-           Ambiguous.labelling=ifelse(Ambiguous.labelling=='Yes','Ambiguous','Unambiguous'))
+  filter(Ambiguous.labelling=='Yes')%>%
+  filter(!is.na(do_you_know_what_fish_this_is))%>%
+  filter(!do_you_know_what_fish_this_is=='no')%>%
+  mutate(Match_do.you.know.fish_DNA_mislabelling=case_when(
+    do_you_know_what_fish_this_is=='bronze whaler' & grepl(paste(c('dusky','copper'),collapse="|"),Common_name_sequenced) ~"Yes",
+    do_you_know_what_fish_this_is=='gummy or bronzie' & grepl(paste(c('dusky','copper','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='gummy or mako' & grepl(paste(c('mako','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='gummy or whiskery' & grepl(paste(c('whiskery','gummy'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='gummy shark' & grepl(paste(c('gummy'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='cape elephant fish' & Common_name_sequenced=='cape elephantfish'~"Yes",
+    grepl('flake',do_you_know_what_fish_this_is) & Common_name_sequenced=="gummy shark"~ "Yes",
+    do_you_know_what_fish_this_is=='hake' & grepl(paste(c('hake'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='hammerhead' & grepl(paste(c('hammerhead'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='hoki' & Common_name_sequenced=='blue grenadier'~"Yes",
+    do_you_know_what_fish_this_is=='shark' & grepl(paste(c('shark'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='snapper' & grepl(paste(c('snapper'),collapse="|"),Common_name_sequenced)~"Yes",
+    do_you_know_what_fish_this_is=='whiskery' & grepl(paste(c('whiskery'),collapse="|"),Common_name_sequenced)~"Yes",
+    TRUE~"No"))%>%
+  mutate(do_you_know_what_fish_this_is=capitalize(do_you_know_what_fish_this_is),
+         Ambiguous.labelling=ifelse(Ambiguous.labelling=='Yes','Ambiguous','Unambiguous'))
 Tab1=dummy%>%
     group_by(do_you_know_what_fish_this_is,Match_do.you.know.fish_DNA_mislabelling,Ambiguous.labelling)%>%
     tally()
@@ -513,11 +521,53 @@ Tab1%>%
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())+
   coord_flip()+xlab('Product name given by retailer')+ylab('Number of samples')+
-  scale_fill_discrete(name = "Misleading answer",type=Mislabelling.col.vec)
+  scale_fill_discrete(name = "Accurate answer",type=c(No="brown4",Yes="forestgreen"))
 ggsave(le.paste("Mislabelling_ambiguous_Do_you_know_what_fish_this_is.tiff"),width = 9,height = 7,compression = "lzw")
 
-  
-#Plot 'do_you_know_where_the_fish_comes_from
+
+df <- dummy %>%
+  mutate(report_label=do_you_know_what_fish_this_is,
+         report_label=case_when(report_label=='Whiskery' ~ 'whiskery shark',
+                                report_label=="Cape elephant fish" ~ "Cape elephantfish",
+                                report_label=="Hammerhead"~"hammerhead shark",
+                                TRUE~report_label),
+         report_label=capitalize(report_label),
+         Common_name_sequenced=capitalize(Common_name_sequenced))%>%
+  make_long(report_label,Common_name_sequenced)%>%
+  mutate(x=ifelse(x=='report_label','Retailer answer',
+                  ifelse(x=='Common_name_sequenced','Sequenced species',
+                         NA)))
+species_colors_do.u.know=c(species_colors,
+                           "Blacktip shark or reef shark"='goldenrod4',
+                           "Gummy or bronzie"='darkgoldenrod4',
+                           "Gummy or mako"='brown2',
+                           "Gummy or whiskery"='darkorange3',
+                           "Hake"='darkslategray3',
+                           'Hoki'='cadetblue3',
+                           'Snapper'='deepskyblue2')
+p=ggplot(df, aes(x = x, 
+                 next_x = next_x, 
+                 node = node, 
+                 next_node = next_node,
+                 fill = factor(node),
+                 label = node)) +
+  geom_sankey(flow.alpha = 0.5, node.color = 1) +
+  geom_sankey_label(size = 4, color = 'white') +  
+  theme_sankey(base_size = 16) +
+  guides(fill = guide_legend(title = "Title"))+
+  theme(legend.position = "none")+xlab('')
+p+scale_fill_manual(values = species_colors_do.u.know)
+ggsave(le.paste("Mislabelling_ambiguous_Sankey_label_sequenced.tiff"),width = 6,height = 8,compression = "lzw")
+
+
+write.csv(dummy%>%
+            group_by(do_you_know_what_fish_this_is,Common_name_sequenced)%>%
+            tally()%>%
+            data.frame,
+          le.paste("Table_Mislabelling_ambiguous_Sankey_label_sequenced.csv"),row.names = F)  
+
+
+# Plot 'do_you_know_where_the_fish_comes_from ----------------------------------------------------------------
 Aussie.origin.do.u.know=c(Aussie.origin,'augusta','between albany and esperance','esperance','local perth','local, wa','perth')
 dummy=DATA%>%
   filter(is.na(advertised_product_origin))%>%
@@ -574,8 +624,7 @@ Tab1%>%
   scale_fill_discrete(name = "Mismatched origin",type=Mislabelling.col.vec)
 ggsave(le.paste("Mismatch.origin_unambiguous_Do.you.know.origin.tiff"),width = 9,height = 7,compression = "lzw")
 
-
-#Sankey plot of temporal variation
+# Sankey plot of temporal variation ----------------------------------------------------------------
 DATA.resampled=DATA%>%
   filter(Replicate.sample=="YES")%>%
   dplyr::select(shop,post_code,sample_date,report_label,Common_name_sequenced)%>%
@@ -632,7 +681,7 @@ write.csv(df%>%
             arrange(report_label,Common_name_sequenced1),
          le.paste("Table_Sankey_label_sequenced_temporal variation.csv"),row.names = F)
 
-#Sankey plot of triplicates variation
+# Sankey plot of triplicates variation ----------------------------------------------------------------
 df <- DATA.resampled%>%filter(Triplicate=='YES' & Sampling.event==2)%>%
   mutate(report_label=capitalize(report_label),
          Common_name_sequenced=capitalize(Common_name_sequenced))
@@ -683,8 +732,7 @@ Raw.table=DATA%>%
 write.csv(Raw.table,le.paste("Table_raw.csv"),row.names = F)
 
 
-
-#Table advertised origin
+# Table advertised origin ----------------------------------------------------------------
 dummy=DATA%>%
   filter(!is.na(advertised_product_origin))%>%
   filter(!Distribution=='Global')%>%  #Mismatch_origin_DNA_origin
@@ -715,8 +763,7 @@ write.csv(dummy%>%dplyr::select(report_label,advertised_product_origin,Common_na
                                 Mismatch_label_DNA_origin)%>%arrange(report_label,Common_name_sequenced),
           le.paste("Table_Mismatch.advertised_origin_raw.csv"),row.names = F)
 
-
-#Testing patterns in mismatches and umbiguous labelling
+# Testing patterns of mismatches and umbiguous labelling on price ----------------------------------------------------------------
 dd=DATA%>%
   mutate(Match_label_DNA_mislabelling=as.factor(Match_label_DNA_mislabelling),
          Ambiguous.labelling=as.factor(Ambiguous.labelling),
@@ -939,7 +986,7 @@ p2=p2%>%
   geom_point(size=1.75,position = position_dodge(width = 0.4))+
   facet_grid(Coastal.town~Ambiguous.labelling)+
   theme_bw()+theme(legend.position = 'top')+
-  guides(color=guide_legend(title="Mislabelling fraud"))+ylab('')+xlab('')+
+  guides(color=guide_legend(title="Mislabelling (fraud)"))+ylab('')+xlab('')+
   scale_color_manual(values=Mislabelling.col.vec)+
   theme_bw()+
   theme(legend.position = 'top',
