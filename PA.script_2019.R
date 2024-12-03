@@ -1,16 +1,13 @@
                 # SCRIPT FOR ANALYSING AND REPORTING PARKS AUSTRALIA PROJECT 2019
 
-#Missing: updated Habitat using Santiago's Video.habitat see #---------Analyse PA Habitat ------------
 # Note: Upload of video data done by PA.script_shared.R see #5. PA - underwater video
-# to do: 
-#   
-#   Review calculations with Jack '#4. Rates of depredation, bait loss and drop outs'
-#   EM vs OM, which shots are comparable? some of the EM videos run out of battery..exclude those
-#   Fish depredation. Calculate also per km gn hours and per caught fish. Same for other behaviours
-#   MISSING: Depredation codes from Underwater video: Codes 10 Predated on & 12 Caught while predating
-#            There is also depredation data from Cameras 1 & 2 in the comments section (videos reviewed by Sarah and anyone else??)
 
-#    consider manyglm instead of adonis
+# Missing: 
+#   updated Habitat using Santiago's Video.habitat see #---------Analyse PA Habitat ------------
+#   Review calculations with Jack '#4. Rates of depredation, bait loss and drop outs'
+#   Fish depredation. Calculate also per km gn hours and per caught fish. Same for other behaviours
+#   Depredation codes from Underwater video: Codes 10 Predated on & 12 Caught while predating
+#      There is also depredation data from Cameras 1 & 2 in the comments section (videos reviewed by Sarah and anyone else??)
 
 #Consider this for depredation:
       # Indices used to quantify depredation and bycatch levels
@@ -183,7 +180,7 @@ if(Event.Mes.data.dump=='Abbey')
   #Video.net.obs
   
 }
-if(Event.Mes.data.dump=='Abbey_Sarah') #takes 2 mins to load data #ACA
+if(Event.Mes.data.dump=='Abbey_Sarah') #takes 1 min to load data 
 {
   tic()
   source(handl_OneDrive("Analyses/Parks Australia/Git_parks.australia/PA.script_2019_shared.R"))
@@ -231,7 +228,7 @@ source(handl_OneDrive("Analyses/Population dynamics/Git_Stock.assessments/SelnCu
 
 
 #---------CONTROL SECTION------------
-explr.dat.entry=TRUE
+explr.dat.entry=FALSE
 do.len_len=FALSE
 do.Historic=FALSE
 do.soc.econ.papr=FALSE
@@ -412,6 +409,8 @@ TEPS.names=data.frame(Name=c('Grey nurse shark','White shark','Smooth stingray',
                              "lightgreen",
                              "steelblue","deepskyblue2",
                              "darkorchid1"))
+not.applicable=c("Shearwaters","Gulls","Little black cormorant","Pied cormorant","Pacific gull")
+TEPS.names=TEPS.names%>%filter(!Name%in%not.applicable)
 TEPS.cols=TEPS.names$Colr
 names(TEPS.cols)=TEPS.names$Name
 
@@ -452,11 +451,6 @@ All.species.names=rbind(All.species.names,Addis)
 #Video.net.interaction <- Video.net.interaction %>% filter(!Interaction =="Missing data")
 #video.longline.interactions <- Video.longline.interaction%>%filter(!Interaction =="Missing data")
 
-Video.net.interaction=Video.net.interaction%>%
-                      mutate(soak.time=case_when(is.na(soak.time) & sheet_no=='Pa0142'~6.76,
-                                                 is.na(soak.time) & sheet_no=='Pa0144'~7.48,
-                                              TRUE~soak.time))
-
 CAAB.gillnet.txt=CAAB.gillnet.txt%>%
   rename(Code=CAAB.CODE)%>%
   mutate(Species='',COMMON_NAME='',CAES_Code='',CAAB_code='',
@@ -469,7 +463,6 @@ CAAB.gillnet.txt=CAAB.gillnet.txt%>%
   dplyr::select(colnames(All.species.names))
 
 All.species.names=rbind(All.species.names,CAAB.gillnet.txt)
-
 
 #---------Manipulate PA hook size, type and snood combinations  ------------
 if('no of baited hooks'%in%names(Hook.combos))  Hook.combos<-Hook.combos%>%dplyr::select(-'no of baited hooks')
@@ -3562,6 +3555,46 @@ Video.longline.maxN=Video.longline.maxN%>%
                 left_join(DATA_PA,by='sheet_no')%>%
                 data.frame
 
+
+Video.net.interaction=Video.net.interaction%>%
+  mutate(Code=case_when(is.na(Code) & Genus=='Cheloniidae'~ 39020002,
+                        is.na(Code) & Genus=='Neophoca'~ 41131005,
+                        is.na(Code) & Genus=='Megaptera'~ 41112006,
+                        is.na(Code) & Species=='commorant'~ 40048000,
+                        TRUE~Code),
+         SP.group=case_when(is.na(SP.group) & Genus=='Cheloniidae'~ "Turtles",
+                            is.na(SP.group) & Genus=='Neophoca'~ "Marine mammals",
+                            is.na(SP.group) & Genus=='Megaptera'~ "Marine mammals",
+                            is.na(SP.group) & Species=='commorant'~ "Seabirds",
+                            TRUE~SP.group),
+         Interaction=case_when(is.na(Interaction) & 
+                                 Code==40048000 &
+                                 grepl(paste(c('DIVING FOR BAIT','feeding','bird',' sear water'),collapse = '|'),
+                                       original.escape) ~'Attracted',
+                               TRUE~Interaction))
+
+Video.longline.interaction=Video.longline.interaction%>%
+  mutate(Code=case_when(is.na(Code) & Genus=='Cheloniidae'~ 39020002,
+                        is.na(Code) & Genus=='Neophoca'~ 41131005,
+                        is.na(Code) & Genus=='Megaptera'~ 41112006,
+                        is.na(Code) & Species=='commorant'~ 40048000,
+                        TRUE~Code),
+         SP.group=case_when(is.na(SP.group) & Genus=='Cheloniidae'~ "Turtles",
+                            is.na(SP.group) & Genus=='Neophoca'~ "Marine mammals",
+                            is.na(SP.group) & Genus=='Megaptera'~ "Marine mammals",
+                            is.na(SP.group) & Species=='commorant'~ "Seabirds",
+                            TRUE~SP.group),
+         Interaction=case_when(is.na(Interaction) & 
+                                 Code==40048000 &
+                                 grepl(paste(c('DIVING FOR BAIT','feeding','bird',' sear water'),collapse = '|'),
+                                       original.escape) ~'Attracted',
+                               TRUE~Interaction))
+
+Video.net.interaction=Video.net.interaction%>%
+  mutate(soak.time=case_when(is.na(soak.time) & sheet_no=='Pa0142'~6.76,
+                             is.na(soak.time) & sheet_no=='Pa0144'~7.48,
+                             TRUE~soak.time)) 
+
 #Add species names and code to DATA
 DATA=DATA%>%
   mutate(species=toupper(species))%>%
@@ -6323,7 +6356,7 @@ if(do.general.underwater)
 #---------Analyse PA Habitat ------------
 if(do.habitat)
 {
-  if(!exists('Video.habitat'))  #original data put together by Jack, superseeded by Santiago's
+  if(!exists('Video.habitat'))  #original data put together by Jack, superseded by Santiago's
   {
     Video.habitat<- read_excel(handl_OneDrive("Parks Australia/2019_project/Data/cameras/Gillnet_longline habitat.xlsx"), 
                                     sheet = "gillnet habitat")
@@ -6692,7 +6725,9 @@ Video.camera2.deck=Video.camera2.deck%>%
                             Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')),
          dropout=ifelse(is.na(dropout),'No',dropout),
          dropout=capitalize(tolower(dropout)),
-         gaffed=capitalize(tolower(gaffed)))
+         gaffed=capitalize(tolower(gaffed)),
+         Code=case_when(is.na(Code) & grepl(paste(c('sealion','Sea Lion'),collapse = '|'),original.dropout) ~41131005,
+                        TRUE~Code))
 
 Video.camera2.deck_observations=Video.camera2.deck_observations%>%  
   data.frame%>%
@@ -6724,13 +6759,25 @@ Video.subsurface=Video.subsurface%>%
          SHEET_NO=case_when(Period=='gillnet'~str_remove(word(DPIRD.code,1,sep = "\\/"),'GN'),
                             Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')))
 Video.subsurface=Video.subsurface%>%filter(!Period=='')
+
 Video.subsurface.comments=Video.subsurface.comments%>%  
-  data.frame%>%
-  mutate(Period=tolower(Period),
-         Code=as.numeric(str_trim(Code)),
-         Code=ifelse(grepl('shearwater',comment) & Code==40128000,40041050,Code),
-         SHEET_NO=case_when(Period=='gillnet'~str_remove(word(DPIRD.code,1,sep = "\\/"),'GN'),
-                            Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')))
+        data.frame%>%
+        mutate(Period=tolower(Period),
+               Period=case_when(grepl('gn',Period) ~ 'gillnet',
+                                grepl('ll',Period) ~ 'longline',
+                                Period=="gillnert" ~ 'gillnet',
+                                TRUE~Period),
+               Code=as.numeric(str_trim(Code)),
+               Code=ifelse(grepl('shearwater',comment) & Code==40128000,40041050,Code),
+               SHEET_NO=case_when(Period=='gillnet'~str_remove(word(DPIRD.code,1,sep = "\\/"),'GN'),
+                                  Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')))
+Video.subsurface.comments=Video.subsurface.comments%>%
+                    mutate(Code=ifelse(is.na(Code) & taxa=='Neophoca cinerea', 41131005,Code),
+                           Period=ifelse(original.condition=='australian sea lion dead','gillnet',Period),
+                           Interaction=interaction,
+                           Interaction=case_when(grepl('diving',original.condition)~'diving',
+                                                 original.condition%in%c('australian sea lion dead','Seabird dead')~ 'Drop out (dead)',
+                                                 TRUE~Interaction))
 
 
   #1. Dropouts
@@ -7180,7 +7227,7 @@ write.csv(Tab.out%>%
           le.paste("Video/underwater/Rate_Bait.loss.csv"),row.names=F)
 rm(Tab.out)
 
-#Subsurface and deck 2 cameras (effort is 1 m or 1 hook per hauling hour)  #ACA
+#Subsurface and deck 2 cameras (effort is 1 m or 1 hook per hauling hour)  
 All.shts=DATA%>%
   distinct(sheet_no,method,haul.time,haul.time.end,net_length,n.hooks)%>%
   mutate(method=ifelse(method=="GN","Gillnet",ifelse(method=="LL","Longline",NA)),
@@ -7371,30 +7418,32 @@ if(approach.camera.observer.comps=='Original')
 }
 if(approach.camera.observer.comps=='Sarah')
 {
-  Video.camera1 <- Video.camera1.deck %>%
-    dplyr::select(DIPRD.code,Code,Period,number,condition) %>% 
-    data.frame%>%
-    separate(DIPRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
-    mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                              Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                              Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                              Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                              Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
-                              Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
-                              Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
-                              Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
-                              Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
-                              Code == 10000910 ~"Sponges"),
-           Period=tolower(Period),
-           sheet_no=case_when(Period == 'gillnet'~ substr(GN, 3, 8),
-                              Period == 'longline'~ substr(LL, 3, 8))) %>% 
-    left_join(DATA_PA,by = 'sheet_no')%>%
-    mutate(Data.set = "camera",
-           Period = ifelse(Period == 'gillnet' & method == 'LL','longline',
-                           ifelse(Period == 'longline' & method == 'GN','gillnet', Period))) %>% 
-    mutate(filter.sheet_no = case_when(str_detect(Period, "(?i)long") ~ as.character(LL),
-                                       str_detect(Period, "(?i)gill") ~ as.character(GN))) %>% 
-    filter(filter.sheet_no %in% D1.good.ones$sheet_no)
+  Video.camera1 <-rbind(Video.camera1.deck_extra.records%>%
+                          rename(DIPRD.code='DIPRD code')%>%
+                          dplyr::select(DIPRD.code,Code,Period,number,condition),Video.camera1.deck %>%
+                          dplyr::select(DIPRD.code,Code,Period,number,condition)) %>% 
+                data.frame%>%
+                separate(DIPRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
+                mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                          Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                          Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                          Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                          Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
+                                          Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
+                                          Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
+                                          Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
+                                          Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
+                                          Code == 10000910 ~"Sponges"),
+                       Period=tolower(Period),
+                       sheet_no=case_when(Period == 'gillnet'~ substr(GN, 3, 8),
+                                          Period == 'longline'~ substr(LL, 3, 8))) %>% 
+                left_join(DATA_PA,by = 'sheet_no')%>%
+                mutate(Data.set = "camera",
+                       Period = ifelse(Period == 'gillnet' & method == 'LL','longline',
+                                       ifelse(Period == 'longline' & method == 'GN','gillnet', Period))) %>% 
+                mutate(filter.sheet_no = case_when(str_detect(Period, "(?i)long") ~ as.character(LL),
+                                                   str_detect(Period, "(?i)gill") ~ as.character(GN))) %>% 
+                filter(filter.sheet_no %in% D1.good.ones$sheet_no)
 }
 
   #1. Export data for Abbey
@@ -8312,11 +8361,15 @@ fn.TEPS.barplot=function(n.shots,d,hours.LL,hours.GN,show.all.levels=TRUE,LGN,TI
   }
    
   d=d%>%
-    mutate(Method.hour=ifelse(Method=='Longline',paste(Method,LGN.LL,sep=''),
+    mutate(Method=ifelse(Method%in%c("Gn","GN"),"Gillnet",
+                  ifelse(Method%in%c("Ll","LL"),"Longline",Method)),
+           Method.hour=ifelse(Method=='Longline',paste(Method,LGN.LL,sep=''),
                        ifelse(Method=='Gillnet',paste(Method,LGN.GN,sep=''),
                        NA)))
-  p=d%>%
-    mutate(Name=factor(Name,levels=TEPS.names$Name))%>%
+  TAB=d%>%
+    mutate(Name=factor(Name,levels=TEPS.names$Name))
+  
+  p=TAB%>%
     ggplot(aes(x=Interaction, y=n, fill=Name)) + 
     geom_bar(position="stack", stat="identity")+
     coord_flip() +
@@ -8332,17 +8385,20 @@ fn.TEPS.barplot=function(n.shots,d,hours.LL,hours.GN,show.all.levels=TRUE,LGN,TI
     scale_x_discrete(position = "top")
   
   if(!is.null(TITL)) p=p+ggtitle(TITL)
-  if(show.all.levels) p=p+scale_fill_manual(values=TEPS.cols)
+  if(show.all.levels) p=p+scale_fill_manual(values=TEPS.cols, drop=FALSE)
   if(!show.all.levels)
   {
     THIS=match(unique(d$Name),names(TEPS.cols))
     p=p+scale_fill_manual(values=TEPS.cols[THIS])
   }
-  print(p)
+  
+  return(list(p=p,TAB=TAB%>%ungroup()))
 }
+#LEGN='none'
+LEGN='top'
 
 # 1.1. Underwater 
-p1=fn.TEPS.barplot(n.shots=rbind(Video.longline.interaction%>%
+out=fn.TEPS.barplot(n.shots=rbind(Video.longline.interaction%>%
                                    dplyr::select(sheet_no,Method,Interaction,Number,SP.group,Species,Code)%>%
                                    mutate(Period='longline'),
                                  Video.net.interaction%>%
@@ -8364,20 +8420,25 @@ p1=fn.TEPS.barplot(n.shots=rbind(Video.longline.interaction%>%
                      filter(!is.na(Interaction))%>%
                      mutate(Interaction=capitalize(tolower(Interaction)))%>%
                      mutate(Interaction=case_when(Interaction=="Avoid" ~ "Avoidance",
-                                                  Interaction=="Caught while predating" ~ "Caught while feeding",
+                                                  Interaction=="Caught while predating" ~ "Caught",
                                                   Interaction=="Bounce off" ~ "Bounced off",
                                                   Interaction== "Swim past" ~ "Swam past",
                                                   Interaction== "Swim through" ~ "Swam through",
-                                                  TRUE~Interaction)),
+                                                  grepl("Caught",Interaction) ~ "Caught",
+                                                  TRUE~Interaction),
+                            Name=factor(Name,levels=TEPS.names$Name)),  
                    hours.LL=hours.underwater.ll,
                    hours.GN=hours.underwater.gn,
-                   LGN="top",
+                   LGN=LEGN,
                    TITL="Underwater cameras")
+write.csv(out$TAB%>%dplyr::select(Method,Interaction,Name,n),le.paste("TEPS/Interactions_number.events_underwater.csv"),row.names = F)
+p1=out$p
+p1
 ggsave(le.paste("TEPS/Interactions_number.events_underwater.tiff"),width = 12,height = 8,compression = "lzw")
 
 
-# 1.2. subsurface
-p2=fn.TEPS.barplot(n.shots=Video.subsurface%>%
+# 1.2. subsurface 
+out=fn.TEPS.barplot(n.shots=Video.subsurface%>%
                      distinct(SHEET_NO,Period)%>%
                      group_by(Period)%>%
                      tally()%>%
@@ -8385,8 +8446,7 @@ p2=fn.TEPS.barplot(n.shots=Video.subsurface%>%
                    d=rbind(Video.subsurface.comments%>%
                              filter(Code%in%TEPS.codes)%>%
                              mutate(Method=capitalize(tolower(Period)),
-                                    Number=1,
-                                    Interaction=ifelse(grepl('diving',comment),'diving',NA))%>%
+                                    Number=1)%>%
                              dplyr::select(Method,Interaction,Code,Number),
                            Video.subsurface%>%
                              filter(Code%in%TEPS.codes)%>%
@@ -8404,15 +8464,19 @@ p2=fn.TEPS.barplot(n.shots=Video.subsurface%>%
                      left_join(TEPS.names,by="Code")%>%
                      group_by(Method,Interaction,Name,Colr,Code)%>%
                      tally(Number)%>%
-                     mutate(Name=factor(Name,levels=TEPS.names$Name)),
+                     mutate(Name=factor(Name,levels=TEPS.names$Name),
+                            Interaction=capitalize(Interaction)),
                    hours.LL=hours.subsurface.ll,
                    hours.GN=hours.subsurface.gn,
-                   LGN="top",
+                   LGN=LEGN,
                    TITL="Subsurface camera")
+write.csv(out$TAB%>%dplyr::select(Method,Interaction,Name,n),le.paste("TEPS/Interactions_number.events_subsurface.csv"),row.names = F)
+p2=out$p
+p2
 ggsave(le.paste("TEPS/Interactions_number.events_subsurface.tiff"),width = 12,height = 8,compression = "lzw")
 
 # 1.3. Deck 1 
-p3=fn.TEPS.barplot(n.shots=Video.camera1%>%
+out=fn.TEPS.barplot(n.shots=Video.camera1%>%
                      distinct(sheet_no,Period)%>%
                      group_by(Period)%>%
                      tally()%>%
@@ -8426,19 +8490,21 @@ p3=fn.TEPS.barplot(n.shots=Video.camera1%>%
                             Method=capitalize(Period))%>%
                      group_by(Method,Interaction,Name,Colr,Code)%>%
                      tally(Number)%>%
-                     mutate(Name=factor(Name,levels=TEPS.names$Name),
-                            Method=factor(Method,levels=c('Gillnet','Longline'))),
+                     mutate(Name=factor(Name,levels=TEPS.names$Name)),
                    hours.LL=hours.deck1.ll,
                    hours.GN=hours.deck1.gn,
-                   LGN="top",
+                   LGN=LEGN,
                    TITL="Deck camera 1")
+write.csv(out$TAB%>%dplyr::select(Method,Interaction,Name,n),le.paste("TEPS/Interactions_number.events_deck1.csv"),row.names = F)
+p3=out$p
+p3
 ggsave(le.paste("TEPS/Interactions_number.events_deck1.tiff"),width = 12,height = 8,compression = "lzw")
 
 # 1.4. Deck 2  (pointing to roller) 
 #note: condition is not recorded by this camera
 if(approach.camera.observer.comps=='Original')
 {
-  p4=fn.TEPS.barplot(n.shots=rbind(Video.camera2.deck_observations%>%distinct(Period,SHEET_NO),
+  out=fn.TEPS.barplot(n.shots=rbind(Video.camera2.deck_observations%>%distinct(Period,SHEET_NO),
                                    Video.camera2.deck%>%distinct(Period,SHEET_NO))%>%
                        distinct(SHEET_NO,Period)%>%
                        group_by(Period)%>%
@@ -8466,14 +8532,14 @@ if(approach.camera.observer.comps=='Original')
                        mutate(Name=factor(Name,levels=TEPS.names$Name)),
                      hours.LL=hours.deck2.ll,
                      hours.GN=hours.deck2.gn,
-                     LGN="top",
+                     LGN=LEGN,
                      TITL="Deck camera 2")
   
 }
 if(approach.camera.observer.comps=='Sarah')
 {
   ## NOTE: Activity strings changed because "passing" should be "caught"
-  p4=fn.TEPS.barplot(n.shots=rbind(Video.camera2.deck_observations%>%distinct(Period,SHEET_NO),
+  out=fn.TEPS.barplot(n.shots=rbind(Video.camera2.deck_observations%>%distinct(Period,SHEET_NO),
                                    Video.camera2.deck%>%distinct(Period,SHEET_NO))%>%
                        distinct(SHEET_NO,Period)%>%
                        group_by(Period)%>%
@@ -8487,9 +8553,6 @@ if(approach.camera.observer.comps=='Sarah')
                                dplyr::select(Period,Genus,Species,Code,Activity),
                              Video.camera2.deck%>%
                                filter(Code%in%TEPS.codes)%>%
-                               # mutate(Activity=ifelse(dropout=='Yes' & gaffed=="No","Drop out",
-                               #                        ifelse(dropout=='Yes' & gaffed=="Yes","Drop out and gaffed",
-                               #                               as.character(Activity))),
                                mutate(Activity = case_when(original.hooklocation == "caught feeding on Sargent Baker" ~ "Feeding",
                                                            original.dropout == "sealion feeding on macki" ~ "Feeding",
                                                            dropout=='Yes' & gaffed=="No" ~ "Drop out",
@@ -8497,7 +8560,6 @@ if(approach.camera.observer.comps=='Sarah')
                                                            Activity == "Passing" ~ "Caught",
                                                            is.na(Activity) ~ "Caught"))%>%
                                dplyr::select(Period,Genus,Species,Code,Activity))%>%
-                       filter(!is.na(Activity))%>%
                        left_join(TEPS.names,by="Code")%>%
                        mutate(Number=1,
                               Method=capitalize(Period),
@@ -8505,17 +8567,21 @@ if(approach.camera.observer.comps=='Sarah')
                        group_by(Method,Activity,Name,Colr,Code)%>%
                        tally(Number)%>%
                        mutate(Interaction= Activity)%>%
-                       mutate(Name=factor(Name,levels=TEPS.names$Name)),
+                       mutate(Name=factor(Name,levels=TEPS.names$Name),
+                              Method=ifelse(Method=='','Longline',Method)),
                      hours.LL=hours.deck2.ll,
                      hours.GN=hours.deck2.gn,
-                     LGN="top",
+                     LGN=LEGN,
                      TITL="Deck camera 2")
   
 }
+write.csv(out$TAB%>%dplyr::select(Method,Interaction,Name,n),le.paste("TEPS/Interactions_number.events_deck2.csv"),row.names = F)
+p4=out$p
+p4
 ggsave(le.paste("TEPS/Interactions_number.events_deck2.tiff"),width = 12,height = 8,compression = "lzw")
 
 #2. Observer data 
-#data from TEPS data sheets
+#data from TEPS data sheets 
 d.teps=TEPS%>%  
   filter(!is.na(contact.code))%>%
   mutate(Method=ifelse(gear.type=="GN","Gillnet",
@@ -8568,7 +8634,7 @@ d.data=d.data[,match(names(d.teps),names(d.data))]%>%
                 ifelse(Method=="LL","Longline",
                 NA)))  
 
-p5=fn.TEPS.barplot(n.shots=DATA%>%
+out=fn.TEPS.barplot(n.shots=DATA%>%
                          distinct(sheet_no,method)%>%
                          mutate(method=ifelse(method=="GN","gillnet",
                                               ifelse(method=="LL","longline",
@@ -8576,25 +8642,31 @@ p5=fn.TEPS.barplot(n.shots=DATA%>%
                          group_by(method)%>%
                          tally()%>%
                          spread(method,n),
-                   d=rbind(d.teps,d.data),
+                   d=rbind(d.teps,d.data)%>%
+                     mutate(Name=factor(Name,levels=TEPS.names$Name)),
                    hours.LL=NULL,
                    hours.GN=NULL,
-                   LGN="top",
+                   LGN=LEGN,
                    TITL="Onboard observers")
-ggsave(le.paste("TEPS/Numbers.interactions.by.gear_Observers.tiff"), width = 12,height = 8,compression = "lzw")
+write.csv(out$TAB%>%dplyr::select(Method,Interaction,Name,n),le.paste("TEPS/Interactions_number_Observers_by.gear.csv"),row.names = F)
+p5=out$p
+p5
+ggsave(le.paste("TEPS/Interactions_number_Observers_by.gear.tiff"), width = 12,height = 8,compression = "lzw")
 
 
 #3. Combine all figures
-fig=ggarrange(p1+rremove("xlab"), p2+rremove("xlab"),
-              p4+rremove("xlab"), p3+rremove("xlab"), 
+fig=ggarrange(p1+rremove("xlab"),
+              p2+rremove("xlab"),
+              p4+rremove("xlab"),
+              p3+rremove("xlab"), 
               p5+rremove("xlab"),
               ncol = 1, nrow = 5,
-              common.legend=TRUE,
-              heights=c(1.5,rep(1,4)))
+              common.legend=TRUE)
 annotate_figure(fig,bottom = text_grob("Number of events",size = 18))   
-ggsave(le.paste("TEPS/Interactions.tiff"), width = 15.2,height = 13,compression = "lzw")
+ggsave(le.paste("TEPS/Interactions.tiff"), width = 15,height = 13.5,compression = "lzw")
 
 
+#4. By shot
 do.inter.for.each.shot=FALSE
 if(do.inter.for.each.shot)
 {
@@ -8695,7 +8767,8 @@ if(do.inter.for.each.shot)
                    pull(sheet_no))
 }
 
-#check ASLs
+
+#5. check ASLs
 check.ASL=FALSE
 if(check.ASL)
 {
