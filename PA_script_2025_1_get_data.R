@@ -9,7 +9,19 @@ library(sf)
 
 # Read in data sets ------------------------------------------------------
 User="Matias"
-if(!exists('handl_OneDrive')) source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+#User="Agustin"
+if(!exists('handl_OneDrive'))
+{
+  if(User=="Matias")
+  {
+    source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+  }
+  if(User=="Agustin")
+  {
+    handl_OneDrive=function(x)paste('your path',x,sep='/')
+  }
+}
+  
 
 paz=handl_OneDrive('Parks Australia/2025_project/Data/Data sets')
 dirs <- list.dirs(path=paz, full.names = FALSE, recursive = FALSE)
@@ -35,6 +47,7 @@ for(d in 1:length(Data.set))
   }
   Data.set[[d]]=dumi
   rm(dumi)
+  print(c('Bring in data for -------------',names(Data.set)[d]))
 }
 
 
@@ -122,11 +135,12 @@ for(d in 1:length(Data.set))
   if(names(Data.set)[d]=="NT")
   {
     dummy=Data.set[[d]]$logbook_shark_location%>%
-                            rename(Latitude=E_decimal_lat,
-                                   Longitude=E_decimal_long,
-                                   Species=C_standard_name)
+                            rename(Latitude=E_Decimal_Lat,
+                                   Longitude=E_Decimal_Long,
+                                   Species=C_STANDARD_NAME)
     Data.set[[d]]=list(NT=dummy)
   }
+  print(c('Add lat long for --------------',names(Data.set)[d]))
 }
 
 #reset colnames
@@ -139,6 +153,7 @@ for(d in 1:length(Data.set))
       colnames(Data.set[[d]][[i]])=capitalize(tolower(colnames(Data.set[[d]][[i]])))
     }
   }
+  print(c('Reset colnames for --------------',names(Data.set)[d]))
 }
 
 #tweak some variable names
@@ -161,6 +176,7 @@ for(d in 1:length(Data.set))
                Latitude=-abs(Latitude))
     }
   }
+  print(c('Tweak  variables for --------------',names(Data.set)[d]))
 }
 
 #add Fishery and Species
@@ -188,6 +204,7 @@ for(d in 1:length(Data.set))
     
     Data.set[[d]][[i]]=Data.set[[d]][[i]]%>%mutate(Species=capitalize(tolower(Species)))
   }
+  print(c('Add Fishery and Species for --------------',names(Data.set)[d]))
 }
 
 
