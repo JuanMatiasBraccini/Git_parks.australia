@@ -94,7 +94,7 @@ User="Matias"
 # User="Abbey"
 
 #2. Species list
-All.species.names=read.csv(handl_OneDrive("Data/Species.code.csv"))
+All.species.names=read.csv(handl_OneDrive("Data/Species.code.csv"),stringsAsFactors=FALSE, fileEncoding="latin1")
 CAAB.gillnet.txt=read.delim('M:/Production Databases/Shark/ParksAustralia_2019/CAAB gillnet.txt', header = TRUE, sep = "\t", dec = ".")
 
 
@@ -6356,7 +6356,9 @@ if(do.general.underwater)
 #---------Analyse PA Habitat ------------
 if(do.habitat)
 {
-  if(!exists('Video.habitat'))  #original data put together by Jack, superseded by Santiago's
+  #aca: missing, combine Santiago's and Jacks and update figures
+  #Santiago's data in M:\Production Databases\Shark\ParksAustralia_2019\Habitat Analysis\TMobs
+  if(!exists('Video.habitat'))  #original data put together by Jack
   {
     Video.habitat<- read_excel(handl_OneDrive("Parks Australia/2019_project/Data/cameras/Gillnet_longline habitat.xlsx"), 
                                     sheet = "gillnet habitat")
@@ -7101,6 +7103,19 @@ save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/Weight_float_specie
 
   #4. Rates of depredation, bait loss and drop outs  
 #Underwater camera
+
+Depredation=c('Caught while predating','Predated on')  
+#Depredation=c(Depredation,'Feeding') # From Sarah "The 'Feeding' behaviour should have only been used in the longlines as it 
+                                      # indicated when a fish fed from the bait on the longline hooks"
+Depredation.species.net=Video.net.interaction%>%
+                          filter(Interaction%in%Depredation)%>%
+                          dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
+                          arrange(Interaction)
+Depredation.species.line=Video.longline.interaction%>%
+                          filter(Interaction%in%Depredation)%>%
+                          dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
+                          arrange(Interaction)
+
 #1. All shots (to add 0 observations)
 All.underwater.shts=rbind(Video.longline.interaction%>%
                             distinct(Camera,sheet_no,Method,soak.time),
@@ -7154,10 +7169,10 @@ Rate.under=rbind(Video.longline.interaction%>%
                    distinct(Camera,sheet_no,Method,soak.time,Interaction),
                  Video.net.interaction%>%
                    distinct(Camera,sheet_no,Method,soak.time,Interaction))%>%
-  filter(Interaction%in%c("Predated on","Caught while predating","Dropout"))%>%
+  filter(Interaction%in%c(Depredation,"Dropout"))%>%
   mutate(Number=1,
          Method=capitalize(Method),
-         Interaction=ifelse(Interaction%in%c("Caught while predating","Predated on"),
+         Interaction=ifelse(Interaction%in%Depredation,
                             "Depredation",Interaction))
 Rate.under=Rate.under%>%
   left_join(All.underwater.shts%>%

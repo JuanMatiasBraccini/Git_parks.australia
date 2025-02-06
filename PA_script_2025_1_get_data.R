@@ -6,6 +6,7 @@ library(Hmisc)
 library(data.table)
 library(ozmaps)
 library(sf)
+library(readxl)
 
 # Read in data sets ------------------------------------------------------
 User="Matias"
@@ -50,6 +51,7 @@ for(d in 1:length(Data.set))
   print(c('Bring in data for -------------',names(Data.set)[d]))
 }
 
+Terry_species <- read_excel(paste(paz,'MAFFRI/Terry_Species.xlsx',sep='/'), sheet = "Sheet1",skip = 0)
 
 # Manipulate data sets ------------------------------------------------------
 #add lats and longs to data sets reporting only grid
@@ -142,6 +144,20 @@ for(d in 1:length(Data.set))
   }
   print(c('Add lat long for --------------',names(Data.set)[d]))
 }
+
+#remove 2008 data from Terry's and add Species names
+Data.set$MAFFRI$MAFFRI_Terry=Data.set$MAFFRI$MAFFRI_Terry%>%
+                              filter(!Year%in%c(2007,2008))%>%
+                              left_join(Terry_species,by='SpScientificName')%>%
+                              rename(Month=Mn,
+                                     Day=Dy,
+                                     Latitude=LatDeg,
+                                     Longitude=LonDeg,
+                                     Maxdepth=Dep,
+                                     Length=Len,
+                                     Lengthtype=LenType)%>%
+                              mutate(Latitude=-abs(Latitude),
+                                     Length=Length/10)
 
 #reset colnames
 for(d in 1:length(Data.set))
