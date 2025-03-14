@@ -3,7 +3,7 @@
 # Note: Upload of video data done by PA.script_shared.R see #5. PA - underwater video
 
 # Missing: 
-#   updated Habitat using Santiago's Video.habitat see #---------Analyse PA Habitat ------------
+#   updated Habitat using Santiago's Video.habitat see #----Analyse PA Habitat --
 #   Review calculations with Jack '#4. Rates of depredation, bait loss and drop outs'
 #   Fish depredation. Calculate also per km gn hours and per caught fish. Same for other behaviours
 #   Depredation codes from Underwater video: Codes 10 Predated on & 12 Caught while predating
@@ -437,7 +437,7 @@ All.species.names=All.species.names%>%
 # All.species.names=All.species.names%>%
 #   mutate(Code=ifelse(COMMON_NAME=='Scaly mackerel',37085018,Code))
 
-#Add Codes used by Jack
+#Add extra Codes used by Jack
 Addis=All.species.names[1:2,]%>%
   mutate(Species=rep('',),
          COMMON_NAME=c('Whaler sharks','Stingrays'),
@@ -446,7 +446,35 @@ Addis=All.species.names[1:2,]%>%
          CAES_Code=rep(NA,2),
          CAAB_code=rep(NA,2),
          Code=c(37018904,37035901))
-All.species.names=rbind(All.species.names,Addis)
+
+#Add extra Codes used by Sarah
+Addis2=All.species.names[1:9,]%>%
+  mutate(Species=rep('',),
+         COMMON_NAME=c('Gastropods','Cormorants','Crustaceans','Western rock lobster',
+                       'Tunas','Stingarees','Drummers',
+                       "Australian sealion",'Flathead'),
+         SCIENTIFIC_NAME=c('Aplysiidae','Phalacrocoracidae','Brachyura','Panulirus cygnus',
+                           'Thunnus spp.','Urolophus spp.','Girella spp.',
+                           'Neophoca cinerea','Platycephalus spp.'),
+         Taxa=c('Mollusc','','Crustacean','Crustacean','Teleost','Elasmobranch','Teleost','','Teleost'),
+         CAES_Code=rep(NA,9),
+         CAAB_code=rep(NA,9),
+         Code=c(24388000,40048000,28850901,28820005,37441925,37038903,37361902,41131005,37296913))
+
+Addis3=All.species.names[1:6,]%>%
+  mutate(Species=rep('',6),
+         COMMON_NAME=c('Black reef leatherjacket','Brownspotted wrasse','Surf Parrotfish',
+                       'Varied carpetshark','Dusky snake blenny','Banded seaperch'),
+         SCIENTIFIC_NAME=c('Eubalichthys bucephalus','Notolabrus parilus','Scarus rivulatus',
+                           'Parascyllium variolatum','Ophiclinus antarcticus','Hypoplectrodes nigroruber'),
+         Taxa=c(rep('Teleost',3),'Elasmobranch',rep('Teleost',2)),
+         CAES_Code=rep(NA,6),
+         CAAB_code=rep(NA,6),
+         Code=c(37465039,37384022,37386027,
+                37013004,37414008,37311037))
+
+
+All.species.names=rbind(All.species.names,Addis,Addis2,Addis3)
 
 #Video.net.interaction <- Video.net.interaction %>% filter(!Interaction =="Missing data")
 #video.longline.interactions <- Video.longline.interaction%>%filter(!Interaction =="Missing data")
@@ -460,9 +488,31 @@ CAAB.gillnet.txt=CAAB.gillnet.txt%>%
   mutate(Taxa=ifelse(Code%in% 37005000:37041902,"Elasmobranch",
                      ifelse(Code%in% 37067000:37470903,"Teleost",
                             NA)))%>%
-  dplyr::select(colnames(All.species.names))
+  dplyr::select(colnames(All.species.names))%>%
+  filter(!Code%in%unique(All.species.names$Code))
 
 All.species.names=rbind(All.species.names,CAAB.gillnet.txt)
+
+#fix some final issues
+All.species.names=All.species.names%>%
+  mutate(COMMON_NAME=case_when(COMMON_NAME=="" &Code==99999999 ~"Seabird",
+                               COMMON_NAME=="" &Code==37311035 ~"Western wirrah",
+                               COMMON_NAME=="" &Code==37466010 ~"Whitebarred boxfish",
+                               COMMON_NAME=="" &Code==37015026 ~"Western spotted catshark",
+                               COMMON_NAME=="" &Code==37469001 ~"Globefish",
+                               COMMON_NAME=="" &Code==37465003 ~"Mosaic leatherjacket",
+                               COMMON_NAME=="" &Code==37060006 ~"Green moray",
+                               COMMON_NAME=="" &Code==37224005 ~"Largetooth beardie",
+                               COMMON_NAME=="" &Code==37465035 ~"Yellowstriped leatherjacket",
+                               COMMON_NAME=="" &Code==37337040 ~"Pilotfish",
+                               COMMON_NAME=="" &Code==37287003 ~"Bighead gurnard perch",
+                               COMMON_NAME=="" &Code==37367002 ~"Giant boarfish",
+                               COMMON_NAME=="" &Code==37296037 ~"Southern bluespotted flathead",
+                               COMMON_NAME=="" &Code==37336005 ~"Spearfish remora",
+                               COMMON_NAME=="" &Code==37367005 ~"Blackspot boarfish",
+                               COMMON_NAME=="" &Code==37287002 ~"Blackspotted gurnard perch",        
+                               COMMON_NAME=="" &Code==37361012 ~"Western buffalo bream",
+                               TRUE~COMMON_NAME))
 
 #---------Manipulate PA hook size, type and snood combinations  ------------
 if('no of baited hooks'%in%names(Hook.combos))  Hook.combos<-Hook.combos%>%dplyr::select(-'no of baited hooks')
@@ -3374,8 +3424,6 @@ if(do.Abbeys)
   } 
 }
 
-  
-
 #Observer data  
 DATA_PA=DATA%>%
   distinct(sheet_no,.keep_all=TRUE)%>%
@@ -3598,7 +3646,9 @@ Video.net.interaction=Video.net.interaction%>%
 #Add species names and code to DATA
 DATA=DATA%>%
   mutate(species=toupper(species))%>%
-  left_join(All.species.names,by=c('species'='Species'))
+  left_join(All.species.names,by=c('species'='Species'))%>%
+  mutate(COMMON_NAME=ifelse(is.na(COMMON_NAME)& !is.na(common_name),common_name,COMMON_NAME),
+         SCIENTIFIC_NAME=ifelse(is.na(SCIENTIFIC_NAME)& !is.na(scientific_name),scientific_name,SCIENTIFIC_NAME))
 
 #Add LL configuration combos
 DATA=DATA%>%
@@ -7344,22 +7394,20 @@ write.csv(Drop.out.rate_subsurface%>%
 #   For paper:
 #     Try model: EM = OM + species group (either species, or genus or family) + day/night + boat + EM analysist
 #           Consider EM analysist to discuss potential bias (Abbey and Jack could remember species from when onboard).
-#     For duskies-coppers, group as 'whalers' for gummy-whiskery, also group.
-#     
+   
 
-# Get video shots with bull battery life 
-D1.good.ones <- D1.cam.battery %>% filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
-  mutate(
-    LL = ifelse(str_detect(`DIPRD code`, "(?i)ll"), as.character(`DIPRD code`), as.character(NA)),
-    GN = ifelse(str_detect(`DIPRD code`, "(?i)gn"), as.character(`DIPRD code`), as.character(NA)),
-    sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL))
-  )
+# Get video shots with full battery life 
+D1.good.ones <- D1.cam.battery %>%
+  filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
+  mutate( LL = ifelse(str_detect(`DIPRD code`, "(?i)ll"), as.character(`DIPRD code`), as.character(NA)),
+          GN = ifelse(str_detect(`DIPRD code`, "(?i)gn"), as.character(`DIPRD code`), as.character(NA)),
+          sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL))) %>%
+  filter(!sheet_no=="GNPA0103")
 D2.good.ones <- D2.cam.battery %>% filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
-  mutate(
-    LL = ifelse(str_detect(DPIRD.code, "(?i)ll"), as.character(DPIRD.code), as.character(NA)),
-    GN = ifelse(str_detect(DPIRD.code, "(?i)gn"), as.character(DPIRD.code), as.character(NA)),
-    sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL))
-  )
+  mutate(LL = ifelse(str_detect(DPIRD.code, "(?i)ll"), as.character(DPIRD.code), as.character(NA)),
+         GN = ifelse(str_detect(DPIRD.code, "(?i)gn"), as.character(DPIRD.code), as.character(NA)),
+         sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL)))%>%
+  filter(!sheet_no=="GNPA0103")
 
 # Write csv for in meta but not df and vice versa
 do.check = FALSE
@@ -7377,15 +7425,15 @@ if(do.check) {
 
 # Deck 1  (pointing to deck)                      
 Video.camera1.deck=Video.camera1.deck%>%
-  mutate(Code=gsub('\\s+', '',Code),
-         Code=as.numeric(Code),
-         method = case_when(Period=='Gillnet'~ 'GN',
-                            Period=='Longline' ~ 'LL'))%>%
-  left_join(All.species.names%>%
-              dplyr::select(COMMON_NAME,Code)%>%
-              distinct(Code,.keep_all=T),
-            by="Code") %>% 
-  rename(DIPRD.code='DIPRD code')
+      mutate(Code=gsub('\\s+', '',Code),
+             Code=as.numeric(Code),
+             method = case_when(Period=='Gillnet'~ 'GN',
+                                Period=='Longline' ~ 'LL'))%>%
+      left_join(All.species.names%>%
+                  dplyr::select(COMMON_NAME,Code)%>%
+                  distinct(Code,.keep_all=T),
+                by="Code") %>% 
+      rename(DIPRD.code='DIPRD code')
 
 if(approach.camera.observer.comps=='Original')
 {
@@ -7555,9 +7603,14 @@ Reset.disc.ret_RET=Reset.disc.ret%>%
                     filter(retainedflag=="Yes")%>%
                     pull(COMMON_NAME)
 EM.vs.OM.DATA=EM.vs.OM.DATA%>%
-  mutate(retainedflag=ifelse(COMMON_NAME%in%Reset.disc.ret_RET,'Yes','No'))
+  mutate(retainedflag=ifelse(COMMON_NAME%in%Reset.disc.ret_RET,'Yes','No'))%>%
+  filter(taxa%in%c('Elasmobranch','Teleost'))
+
+EM.vs.OM.DATA=EM.vs.OM.DATA%>%
+  mutate(sheet_no=ifelse(sheet_no=="PA1109",'PA0109',sheet_no))  #same shot but data sheet split in 2
 
 EM.vs.OM.Video.camera1=Video.camera1%>%
+                  filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
                   mutate(Code=as.numeric(Code))%>%
                   left_join(All.species.names%>%
                               dplyr::select(COMMON_NAME,Code)%>%
@@ -7599,13 +7652,13 @@ fn.obs_cam.barplot=function(n.shots,Cam,Obs,LGN,TITL)
 {
   LGN.LL=paste(' (',n.shots$LL,' shots)',sep='')
   LGN.GN=paste(' (',n.shots$GN,' shots)',sep='')
-  
+  N.other=length(This.sp.other)
   d=rbind(Cam,Obs)%>%
     mutate(Method.hour=ifelse(method=='Longline',paste(method,LGN.LL,sep=''),
                        ifelse(method=='Gillnet',paste(method,LGN.GN,sep=''),
                        NA)))%>%
     filter(!is.na(method))%>%
-    mutate(COMMON_NAME=ifelse(COMMON_NAME%in%This.sp.other,COMMON_NAME,"Other"))
+    mutate(COMMON_NAME=ifelse(!COMMON_NAME%in%This.sp.other,COMMON_NAME,paste0("Other (n=",N.other,' species)')))
   p=d%>%
     ggplot(aes(x=COMMON_NAME, y=n, fill=Platform)) + 
     geom_bar(position="dodge", stat="identity")+
@@ -7629,7 +7682,7 @@ fn.obs_cam.barplot=function(n.shots,Cam,Obs,LGN,TITL)
 
     #Commercial species
 This.sp=TAB.comm%>%pull(COMMON_NAME)
-This.sp.other=TAB.comm%>%filter(Percent<=95)%>%pull(COMMON_NAME)
+This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
 p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
                         filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
                         distinct(sheet_no,method)%>%
@@ -7655,7 +7708,7 @@ p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
 
     #Bycatch species    
 This.sp=TAB.disc%>%pull(COMMON_NAME)
-This.sp.other=TAB.disc%>%filter(Percent<=95)%>%pull(COMMON_NAME)
+This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
 p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
                         filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
                         distinct(sheet_no,method)%>%
@@ -7728,7 +7781,9 @@ fn.mod=function(dd,SBTL)
   #QuasiPois.mod <- glm(Camera ~ Observer * method, family=quasipoisson(link = "identity"), data=d1)
   #NB.mod <- glm.nb(Camera ~ Observer * method, data=d1, link='identity')
   
-  mod <- glm(Camera ~ Observer + method, family="gaussian", data=dd)
+  mod <- glm(Camera ~ Observer + method , family="gaussian", data=dd)
+  #mod <- glm(Camera ~ Observer + method + COMMON_NAME, family="gaussian", data=dd)
+  Over.dispesion=check_overdispersion(mod)
   D2.mod=D2(mod$null.deviance,mod$deviance)
   
   pred=predict(mod,type='response',se.fit=T)
@@ -7740,13 +7795,14 @@ fn.mod=function(dd,SBTL)
            high=Camera+1.96*Pred.SE)
   p=dd%>%
     ggplot(aes(Observer,Camera,color=method))+
-    geom_jitter(size=2.5)+
-    geom_line(aes(Observer,Observer),linetype=2,color='black')+
-    geom_line(data=Preds,aes(Observer,Camera))+
+    geom_point(size=2.5,alpha = 0.5)+
+    facet_wrap(~method,scales='free')+
     geom_ribbon(data=Preds,aes(ymin = low, ymax = high,fill=method),alpha = 0.2)+
+    geom_line(data=Preds,aes(Observer,Camera))+
+    geom_line(aes(Observer,Observer),linetype=2,color='black')+
     theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
              leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = "top",
+    theme(legend.position = 'none',
           legend.title = element_blank())+
     xlab("Number of individuals reported by observer")+
     ylab("Number of individuals recorded from camera")+
@@ -7759,7 +7815,7 @@ fn.mod=function(dd,SBTL)
            high=Estimate+1.96*SE,
            Coef=c("Intercept","Slope"))
   
-  return(list(mod=mod,p=p))
+  return(list(mod=mod,p=p,Over.dispesion=Over.dispesion,COEF=COEF))
 }
 lolipop=function(x)
 {
@@ -7805,16 +7861,9 @@ fn.compare.obs.cam=function(CAM, OBS, GROUP, Terms, Minobs.per)
   
   d=d%>%
     mutate(method=ifelse(method=="GN","Gillnet",
-                         ifelse(method=="LL","Longline",
-                                method)))
-  # Efrt=OBS%>%
-  #   filter(sheet_no%in%d$sheet_no)%>%
-  #   distinct(sheet_no,method,Effort.infRD)
-  
-  # d=d%>%
-  #   left_join(Efrt,by=c("sheet_no","method"))%>%
-  #   filter(!COMMON_NAME=="Unidentified")
-  
+                  ifelse(method=="LL","Longline",
+                  method)))
+
   #extract non-match data for review
   out.for.Jack=d%>%
     dplyr::select(-method)%>%
@@ -7907,7 +7956,9 @@ fn.compare.obs.cam=function(CAM, OBS, GROUP, Terms, Minobs.per)
     filter(!is.na(method))%>%
     mutate(method=factor(method))
   
+  #Fit glm
   Discarded.species=TAB.disc%>%pull(COMMON_NAME)
+  
   mod_all.species=fn.mod(dd=d1,SBTL="All species")
   mod_commercial.species=fn.mod(dd=d1%>%
                                   filter(!COMMON_NAME%in%Discarded.species),
@@ -8001,12 +8052,10 @@ fn.compare.obs.cam=function(CAM, OBS, GROUP, Terms, Minobs.per)
               p.GN=p.GN,p.LL=p.LL,
               adon.GN=adon.GN,adon.LL=adon.LL))
 }
-
-Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera1,
+#ACA
+Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera1, 
                        OBS=EM.vs.OM.DATA%>%
-                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera1$sheet_no))%>%
-                         filter(!(COMMON_NAME=='Guitarfish & shovelnose rays' & sheet_no=='PA0039'))%>%
-                         filter(!(COMMON_NAME=='Stingrays' & sheet_no=='PA0107')),   #dropped out 'Guitarfish & shovelnose rays' & 'Stingrays
+                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera1$sheet_no)),   
                        GROUP='Top20',
                        Terms='Platform',
                        Minobs.per=Minobs.per)
@@ -8124,6 +8173,7 @@ if(approach.camera.observer.comps=='Sarah')
 }
 
 EM.vs.OM.Video.camera2=Video.camera2%>%
+  filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
   mutate(Code=as.numeric(Code))%>%
   left_join(All.species.names%>%
               dplyr::select(COMMON_NAME,Code)%>%
@@ -8166,7 +8216,7 @@ TAB.disc=TAB%>%
 
 #Commercial species
 This.sp=TAB.comm%>%pull(COMMON_NAME)
-This.sp.other=TAB.comm%>%filter(Percent<=95)%>%pull(COMMON_NAME)
+This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
 p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
                         filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
                         distinct(sheet_no,method)%>%
@@ -8192,7 +8242,7 @@ p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
 
 #Bycatch species
 This.sp=TAB.disc%>%pull(COMMON_NAME)
-This.sp.other=TAB.disc%>%filter(Percent<=95)%>%pull(COMMON_NAME)
+This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
 p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
                         filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
                         distinct(sheet_no,method)%>%
@@ -8226,9 +8276,7 @@ ggsave(le.paste("Camera2_v_Observer/Barplot.tiff"),width = 12,height = 12,compre
 #2. Statistical comparison  
 Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera2,
                        OBS=EM.vs.OM.DATA%>%
-                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera2$sheet_no))%>%
-                         filter(!(COMMON_NAME=='Guitarfish & shovelnose rays' & sheet_no=='PA0039'))%>%
-                         filter(!(COMMON_NAME=='Stingrays' & sheet_no=='PA0107')),   #dropped out 'Guitarfish & shovelnose rays' & 'Stingrays
+                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera2$sheet_no)),   
                        GROUP='Top20',
                        Terms='Platform',
                        Minobs.per=Minobs.per)
