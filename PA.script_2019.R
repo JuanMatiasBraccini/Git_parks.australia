@@ -242,6 +242,9 @@ do.Longline.selectivity=FALSE
 do.general.underwater=FALSE
 do.habitat=FALSE
 do.Abbeys=FALSE
+do.dropouts.gaffing.water.column=FALSE
+do.camera.VS.observer=FALSE
+
 approach.camera.observer.comps='Sarah'
 #approach.camera.observer.comps='Original'
 
@@ -6765,7 +6768,8 @@ if(do.habitat)
 }
 
 
-#---------Dropouts, Gaffing & Position in water column (catch around weight or float) ---------  
+#---------Dropouts, depredation, Gaffing & Position in water column (catch around weight or float) ---------  
+
 Video.camera2.deck=Video.camera2.deck%>%
   data.frame%>%
   mutate(Period=tolower(Period),
@@ -6831,1506 +6835,1597 @@ Video.subsurface.comments=Video.subsurface.comments%>%
                                                  original.condition%in%c('australian sea lion dead','Seabird dead')~ 'Drop out (dead)',
                                                  TRUE~Interaction))
 
-
-  #1. Dropouts
-
-    #1.1 Barplot for deck camera 2 and subsurface camera  
-fn.plt.dropouts=function(d,TITLE,LegPos,var,MinN)
+if(do.dropouts.gaffing.water.column)
 {
-  these.drop.out.sp=table(d$Code)
-  these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
-  names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
+  #1. Dropouts
   
-  Col.vec=these.drop.out.sp
-  Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
+  #1.1 Barplot for deck camera 2 and subsurface camera  
+  fn.plt.dropouts=function(d,TITLE,LegPos,var,MinN)
+  {
+    these.drop.out.sp=table(d$Code)
+    these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
+    names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
+    
+    Col.vec=these.drop.out.sp
+    Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
+    
+    d=d%>%
+      filter(Code%in%these.drop.out.sp)%>%
+      group_by(Code,!!sym(var),Period)%>%
+      tally()%>%
+      mutate(dummy=factor(!!sym(var)),
+             Period=capitalize(Period))
+    d=d%>% 
+      left_join(All.species.names%>%
+                  filter(Code%in%unique(d$Code))%>%
+                  dplyr::select(COMMON_NAME,Code),by="Code")%>%  
+      mutate(COMMON_NAME=factor(COMMON_NAME,levels=names(sort(these.drop.out.sp))))
+    
+    vals=c("#00BFC4","#F8766D","#7CAE00")
+    if(var=="dropout") vals=c("#7CAE00","#F8766D","#00BFC4")
+    if(var=="Gaffed") vals=c("#F8766D","#00BFC4","#7CAE00")
+    
+    
+    p=d%>%
+      filter(!is.na(dummy))%>%
+      ggplot(aes(fill=dummy, y=n, x=COMMON_NAME)) + 
+      geom_bar(position="stack", stat="identity")+
+      coord_flip() +
+      facet_wrap(~Period,dir='h')+ 
+      theme_PA(Ttl.siz=18,Sbt.siz=16,str.siz=18,strx.siz=18,
+               cap.siz=10,lgT.siz=14,leg.siz=16,axs.t.siz=14,axs.T.siz=16)+
+      theme(legend.position = LegPos,
+            legend.title = element_blank(),
+            axis.text.y = element_text(colour = Col.vec),
+            plot.title = element_text(hjust = -.4))+
+      xlab('')+ylab('Number of events')
+    if(var=="dropout")
+    {
+      vals=c("#7CAE00","#F8766D","#00BFC4")
+      p=p+
+        scale_fill_manual(values=vals[1:length(unique(d$dummy))])
+    }
+    if(var=="Dropout.condition")
+    {
+      vals=c("#7CAE00","#F8766D","#00BFC4")
+      p=p+
+        scale_fill_manual(values=vals[1:length(unique(d$dummy))])
+    }
+    if(!is.null(TITLE))p=p+ggtitle(TITLE)
+    
+    return(p)
+  }
   
-  d=d%>%
-    filter(Code%in%these.drop.out.sp)%>%
-    group_by(Code,!!sym(var),Period)%>%
+  p1=fn.plt.dropouts(d=Video.camera2.deck,
+                     TITLE="Deck camera 2",
+                     LegPos="top",
+                     var='dropout',
+                     MinN=Min.N.drop.out)
+  p2=fn.plt.dropouts(d=Video.subsurface%>%
+                       mutate(dropout=ifelse(dropout=='Gaffed','Yes',dropout)),
+                     TITLE="Subsurface camera",
+                     LegPos="none",
+                     var='dropout',
+                     MinN=Min.N.drop.out)
+  ggarrange(p1, p2, ncol = 1, nrow = 2,heights=c(1.5,1))
+  ggsave(le.paste("Video/deck.cameras/Drop.out.events.tiff"),
+         width = 10,height = 12,compression = "lzw")
+  
+  
+  #1.2 glm for drop out probability by method  
+  fn.glm.dropouts=function(d,var,MinN)
+  {
+    these.drop.out.sp=table(d$Code)
+    these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
+    names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
+    
+    Col.vec=these.drop.out.sp
+    Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
+    
+    d=d%>%
+      filter(Code%in%these.drop.out.sp)%>%
+      group_by(Code,!!sym(var),Period)%>%
+      tally()%>%
+      mutate(dummy=!!sym(var),
+             Period=capitalize(Period))%>%
+      left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
+      ungroup()%>%
+      dplyr::select(Period,n,dummy,COMMON_NAME)%>%
+      spread(dummy,n,fill=0)
+    
+    d.GN=d%>%filter(Period=="Gillnet")%>%
+      mutate(COMMON_NAME=factor(COMMON_NAME))
+    GN.glm <- glm( cbind(No, Yes) ~ COMMON_NAME, data = d.GN, family = "binomial")
+    
+    d.LL=d%>%filter(Period=="Longline")%>%
+      mutate(COMMON_NAME=factor(COMMON_NAME))
+    LL.glm <- glm( cbind(No, Yes) ~ COMMON_NAME, data = d.LL, family = "binomial")
+    
+    
+    #Predict species
+    GN.pred=summary(emmeans(GN.glm, 'COMMON_NAME', type="response"))
+    LL.pred=summary(emmeans(LL.glm, 'COMMON_NAME', type="response"))
+    
+    return(list(GN.glm=GN.glm,LL.glm=LL.glm,GN.pred=GN.pred,LL.pred=LL.pred,
+                Col.vec=data.frame(COMMON_NAME=names(Col.vec),Col=Col.vec)))
+  }
+  Glm.dropouts=fn.glm.dropouts(d=Video.camera2.deck,
+                               var='dropout',
+                               MinN=Min.N.drop.out)
+  
+  ft <- as_flextable(Glm.dropouts$GN.glm)
+  save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/drop_outs_GN.png"))
+  #save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/drop_outs_GN.docx"))
+  
+  ft <- as_flextable(Glm.dropouts$LL.glm)
+  save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/drop_outs_LL.png"))
+  #save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/drop_outs_LL.docx"))
+  
+  rm(ft)
+  
+  p=fn.barplot.cpue(d=rbind(Glm.dropouts$GN.pred%>%
+                              mutate(method="Gillnet"),
+                            Glm.dropouts$LL.pred%>%
+                              mutate(method="Longline"))%>%
+                      left_join(Glm.dropouts$Col.vec,by='COMMON_NAME')%>%
+                      mutate(Group=Col,
+                             species=COMMON_NAME,
+                             x=COMMON_NAME,
+                             y=1-prob,
+                             fill=Group,
+                             facet=method,
+                             lower.CL=1-asymp.LCL,
+                             upper.CL=1-asymp.UCL),
+                    YLAB="Drop out probability",
+                    XLAB='',
+                    cex=12,
+                    Rotate='Yes',
+                    Relative="No",
+                    RETURN=FALSE)
+  fn.fig(le.paste("Video/deck.cameras/Drop.out.events_predictions_deckcam2"),2000,2000)
+  p+scale_fill_manual(values=c("firebrick","steelblue"))+
+    theme(axis.text.x = element_text(angle = 55, vjust = 1, hjust=1))
+  dev.off()
+  
+  
+  #1.3.Table of drop out percent (drop out numbers per total number of individuals interacting with gear)
+  fun.table.ret.disc=function(d)
+  {
+    TAB=d%>%
+      left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
+      mutate(dropout=ifelse(dropout=='No','Retained','Drop.out'))%>%
+      group_by(COMMON_NAME,dropout,Period)%>%
+      tally()%>%
+      ungroup()%>%
+      mutate(Period=capitalize(Period),
+             drop.period=paste(dropout,Period,sep='.'))%>%
+      dplyr::select(-c(dropout,Period))%>%
+      spread(drop.period,n,fill=0)%>%
+      mutate(Percent.drop.out.gillnet=round(100*Drop.out.Gillnet/(Retained.Gillnet+Drop.out.Gillnet),1),
+             Percent.drop.out.longline=round(100*Drop.out.Longline/(Retained.Longline+Drop.out.Longline),1))%>%
+      arrange(COMMON_NAME)%>%
+      relocate(COMMON_NAME,Retained.Gillnet,Drop.out.Gillnet,Percent.drop.out.gillnet,
+               Retained.Longline,Drop.out.Longline,Percent.drop.out.longline)%>%
+      mutate_at(vars(Percent.drop.out.longline), ~replace(., is.nan(.), ""))%>%
+      mutate_at(vars(Percent.drop.out.gillnet), ~replace(., is.nan(.), ""))%>%
+      mutate(Drop.out.Gillnet=ifelse(Percent.drop.out.gillnet=='','',Drop.out.Gillnet),
+             Retained.Gillnet=ifelse(Percent.drop.out.gillnet=='','',Retained.Gillnet),
+             Drop.out.Longline=ifelse(Percent.drop.out.longline=='','',Drop.out.Longline),
+             Retained.Longline=ifelse(Percent.drop.out.longline=='','',Retained.Longline))%>%
+      left_join(DATA%>%
+                  distinct(common_name,Taxa),by=c('COMMON_NAME'='common_name'))%>%
+      mutate(n=as.numeric(Retained.Gillnet)+as.numeric(Drop.out.Gillnet))%>%
+      ungroup()%>%
+      arrange(Taxa,-n)%>%
+      dplyr::select(-Taxa,-n)
+    return(TAB)
+  }
+  write.csv(fun.table.ret.disc(d=Video.camera2.deck%>%filter(!is.na(Code))),
+            le.paste("Video/deck.cameras/Drop.out.events_table_camera2.csv"),row.names = F)
+  
+  write.csv(fun.table.ret.disc(d=Video.subsurface%>%filter(!is.na(Code))),
+            le.paste("Video/deck.cameras/Drop.out.events_table_subsurface.csv"),row.names = F)
+  
+  #1.4 Drop outs fate
+  p=fn.plt.dropouts(d=Video.subsurface%>%filter(!dropout=='No'),
+                    TITLE="Subsurface camera",
+                    LegPos="top",
+                    var='Dropout.condition',
+                    MinN=1)
+  p+theme(plot.title=element_text(hjust = -.25))
+  ggsave(le.paste("Video/deck.cameras/Drop.out.events_fate_subsurface.tiff"),width = 10,height = 8,compression = "lzw")
+  
+  
+  #2. Gaffing of drop outs
+  #subsurface camera
+  p1=fn.plt.dropouts(d=Video.subsurface%>%
+                       filter(!(Genus=='Heterodontus' & Gaffed=='yes'))%>%
+                       filter(!is.na(Gaffed))%>%
+                       filter(dropout=='Yes')%>%
+                       mutate(Gaffed=capitalize(Gaffed),
+                              Gaffed=ifelse(Gaffed=="Yes","Gaffed","Lost"),
+                              Gaffed=factor(Gaffed,levels=c("Lost","Gaffed"))),
+                     TITLE="Subsurface camera",
+                     LegPos="top",
+                     var='Gaffed',
+                     MinN=1)
+  p1=p1+theme(plot.title=element_text(hjust = -.25))
+  #ggsave(le.paste("Video/deck.cameras/Drop.out.events_gaffing_subsurface.tiff"),width = 10,height = 8,compression = "lzw")
+  
+  #deck camera 2  
+  p2=fn.plt.dropouts(d=Video.camera2.deck%>%
+                       mutate(Gaffed=case_when(dropout=='Yes' & gaffed%in%c('No') ~  'Lost',
+                                               dropout=='Yes' & gaffed%in%c('Yes') ~  'Gaffed',
+                                               TRUE ~ gaffed))%>%
+                       filter(!is.na(gaffed) & dropout=='Yes'),
+                     TITLE="Deck camera 2",
+                     LegPos="top",
+                     var='Gaffed',
+                     MinN=1)
+  p2=p2+theme(plot.title=element_text(hjust = -.25))
+  
+  fig=ggarrange(p1+rremove("xlab"), p2+rremove("xlab"),
+                ncol = 1, nrow = 2,
+                common.legend=TRUE)
+  annotate_figure(fig,bottom = text_grob("Number of events",size = 18))
+  ggsave(le.paste("Video/deck.cameras/Drop.out.events_gaffing.tiff"),width = 10,height = 8,compression = "lzw")
+  
+  
+  #3. Composition around weight or float
+  # Display data
+  Data_water.column=Video.camera2.deck%>%
+    filter(!SHEET_NO%in%No.good.water.column)%>%
+    mutate(Code=ifelse(Code==37018001,37018003,Code),
+           water.column=tolower(hook.distance.to.float.weight))%>%
+    filter(!is.na(water.column))
+  these.compo.sp=Data_water.column%>%
+    group_by(Code)%>%
     tally()%>%
-    mutate(dummy=factor(!!sym(var)),
-           Period=capitalize(Period))
-  d=d%>% 
-    left_join(All.species.names%>%
-                filter(Code%in%unique(d$Code))%>%
-                dplyr::select(COMMON_NAME,Code),by="Code")%>%  
-    mutate(COMMON_NAME=factor(COMMON_NAME,levels=names(sort(these.drop.out.sp))))
-  
-  vals=c("#00BFC4","#F8766D","#7CAE00")
-  if(var=="dropout") vals=c("#7CAE00","#F8766D","#00BFC4")
-  if(var=="Gaffed") vals=c("#F8766D","#00BFC4","#7CAE00")
-  
-  
-  p=d%>%
-    filter(!is.na(dummy))%>%
-    ggplot(aes(fill=dummy, y=n, x=COMMON_NAME)) + 
+    filter(n>=Min.obs.comp.wei.flot)%>%
+    pull(Code)
+  names(these.compo.sp)=All.species.names[match(these.compo.sp,All.species.names$Code),"COMMON_NAME"]
+  Col.vec=these.compo.sp
+  Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
+  Data_water.column=Data_water.column%>%
+    filter(Code%in%these.compo.sp)%>%
+    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
+    mutate(COMMON_NAME=factor(COMMON_NAME,levels=names(these.compo.sp)))
+  Data_water.column%>%
+    group_by(Code,water.column,Period,COMMON_NAME)%>%
+    tally()%>%
+    mutate(water.column=factor(water.column,levels=c("1w","2w","3w","1f","2f","3f")),
+           Period=capitalize(Period))%>%
+    ggplot(aes(fill=water.column, y=n, x=COMMON_NAME)) + 
     geom_bar(position="stack", stat="identity")+
     coord_flip() +
-    facet_wrap(~Period,dir='h')+ 
-    theme_PA(Ttl.siz=18,Sbt.siz=16,str.siz=18,strx.siz=18,
-             cap.siz=10,lgT.siz=14,leg.siz=16,axs.t.siz=14,axs.T.siz=16)+
-    theme(legend.position = LegPos,
-          legend.title = element_blank(),
-          axis.text.y = element_text(colour = Col.vec),
-          plot.title = element_text(hjust = -.4))+
-    xlab('')+ylab('Number of events')
-  if(var=="dropout")
-  {
-    vals=c("#7CAE00","#F8766D","#00BFC4")
-    p=p+
-      scale_fill_manual(values=vals[1:length(unique(d$dummy))])
-  }
-  if(var=="Dropout.condition")
-  {
-    vals=c("#7CAE00","#F8766D","#00BFC4")
-    p=p+
-      scale_fill_manual(values=vals[1:length(unique(d$dummy))])
-  }
-  if(!is.null(TITLE))p=p+ggtitle(TITLE)
+    facet_wrap(~Period,dir='h',scales='free_x')+ 
+    theme_PA(str.siz=20,strx.siz=20,
+             leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
+    theme(legend.position = "top",
+          legend.title = element_blank())+
+    scale_fill_manual(values=c("orange","firebrick2","firebrick4","lightblue2","deepskyblue2","dodgerblue4"))+
+    xlab('')+ylab('Number of events')+ 
+    guides(fill = guide_legend(nrow = 1, byrow = TRUE))
+  ggsave(le.paste("Video/deck.cameras/Weight_float_species.events.tiff"),width = 10,height = 8,compression = "lzw")
   
-  return(p)
-}
-
-p1=fn.plt.dropouts(d=Video.camera2.deck,
-                   TITLE="Deck camera 2",
-                   LegPos="top",
-                   var='dropout',
-                   MinN=Min.N.drop.out)
-p2=fn.plt.dropouts(d=Video.subsurface%>%
-                     mutate(dropout=ifelse(dropout=='Gaffed','Yes',dropout)),
-                   TITLE="Subsurface camera",
-                   LegPos="none",
-                   var='dropout',
-                   MinN=Min.N.drop.out)
-ggarrange(p1, p2, ncol = 1, nrow = 2,heights=c(1.5,1))
-ggsave(le.paste("Video/deck.cameras/Drop.out.events.tiff"),
-       width = 10,height = 12,compression = "lzw")
-
-
-  #1.2 glm for drop out probability by method  
-fn.glm.dropouts=function(d,var,MinN)
-{
-  these.drop.out.sp=table(d$Code)
-  these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
-  names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
-  
-  Col.vec=these.drop.out.sp
-  Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
-  
-  d=d%>%
-    filter(Code%in%these.drop.out.sp)%>%
-    group_by(Code,!!sym(var),Period)%>%
-    tally()%>%
-    mutate(dummy=!!sym(var),
-           Period=capitalize(Period))%>%
-    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
-    ungroup()%>%
-    dplyr::select(Period,n,dummy,COMMON_NAME)%>%
-    spread(dummy,n,fill=0)
-  
-  d.GN=d%>%filter(Period=="Gillnet")%>%
-    mutate(COMMON_NAME=factor(COMMON_NAME))
-  GN.glm <- glm( cbind(No, Yes) ~ COMMON_NAME, data = d.GN, family = "binomial")
-  
-  d.LL=d%>%filter(Period=="Longline")%>%
-    mutate(COMMON_NAME=factor(COMMON_NAME))
-  LL.glm <- glm( cbind(No, Yes) ~ COMMON_NAME, data = d.LL, family = "binomial")
-  
-  
-  #Predict species
-  GN.pred=summary(emmeans(GN.glm, 'COMMON_NAME', type="response"))
-  LL.pred=summary(emmeans(LL.glm, 'COMMON_NAME', type="response"))
-  
-  return(list(GN.glm=GN.glm,LL.glm=LL.glm,GN.pred=GN.pred,LL.pred=LL.pred,
-              Col.vec=data.frame(COMMON_NAME=names(Col.vec),Col=Col.vec)))
-}
-Glm.dropouts=fn.glm.dropouts(d=Video.camera2.deck,
-                var='dropout',
-                MinN=Min.N.drop.out)
-
-ft <- as_flextable(Glm.dropouts$GN.glm)
-save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/drop_outs_GN.png"))
-#save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/drop_outs_GN.docx"))
-
-ft <- as_flextable(Glm.dropouts$LL.glm)
-save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/drop_outs_LL.png"))
-#save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/drop_outs_LL.docx"))
-
-rm(ft)
-
-p=fn.barplot.cpue(d=rbind(Glm.dropouts$GN.pred%>%
-                            mutate(method="Gillnet"),
-                          Glm.dropouts$LL.pred%>%
-                            mutate(method="Longline"))%>%
-                    left_join(Glm.dropouts$Col.vec,by='COMMON_NAME')%>%
-                    mutate(Group=Col,
-                           species=COMMON_NAME,
-                           x=COMMON_NAME,
-                           y=1-prob,
-                           fill=Group,
-                           facet=method,
-                           lower.CL=1-asymp.LCL,
-                           upper.CL=1-asymp.UCL),
-                  YLAB="Drop out probability",
-                  XLAB='',
-                  cex=12,
-                  Rotate='Yes',
-                  Relative="No",
-                  RETURN=FALSE)
-fn.fig(le.paste("Video/deck.cameras/Drop.out.events_predictions_deckcam2"),2000,2000)
-p+scale_fill_manual(values=c("firebrick","steelblue"))+
-  theme(axis.text.x = element_text(angle = 55, vjust = 1, hjust=1))
-dev.off()
-
-
-  #1.3.Table of drop out percent (drop out numbers per total number of individuals interacting with gear)
-fun.table.ret.disc=function(d)
-{
-  TAB=d%>%
-    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
-    mutate(dropout=ifelse(dropout=='No','Retained','Drop.out'))%>%
-    group_by(COMMON_NAME,dropout,Period)%>%
-    tally()%>%
-    ungroup()%>%
-    mutate(Period=capitalize(Period),
-           drop.period=paste(dropout,Period,sep='.'))%>%
-    dplyr::select(-c(dropout,Period))%>%
-    spread(drop.period,n,fill=0)%>%
-    mutate(Percent.drop.out.gillnet=round(100*Drop.out.Gillnet/(Retained.Gillnet+Drop.out.Gillnet),1),
-           Percent.drop.out.longline=round(100*Drop.out.Longline/(Retained.Longline+Drop.out.Longline),1))%>%
-    arrange(COMMON_NAME)%>%
-    relocate(COMMON_NAME,Retained.Gillnet,Drop.out.Gillnet,Percent.drop.out.gillnet,
-             Retained.Longline,Drop.out.Longline,Percent.drop.out.longline)%>%
-    mutate_at(vars(Percent.drop.out.longline), ~replace(., is.nan(.), ""))%>%
-    mutate_at(vars(Percent.drop.out.gillnet), ~replace(., is.nan(.), ""))%>%
-    mutate(Drop.out.Gillnet=ifelse(Percent.drop.out.gillnet=='','',Drop.out.Gillnet),
-           Retained.Gillnet=ifelse(Percent.drop.out.gillnet=='','',Retained.Gillnet),
-           Drop.out.Longline=ifelse(Percent.drop.out.longline=='','',Drop.out.Longline),
-           Retained.Longline=ifelse(Percent.drop.out.longline=='','',Retained.Longline))%>%
-    left_join(DATA%>%
-                distinct(common_name,Taxa),by=c('COMMON_NAME'='common_name'))%>%
-    mutate(n=as.numeric(Retained.Gillnet)+as.numeric(Drop.out.Gillnet))%>%
-    ungroup()%>%
-    arrange(Taxa,-n)%>%
-    dplyr::select(-Taxa,-n)
-  return(TAB)
-}
-write.csv(fun.table.ret.disc(d=Video.camera2.deck%>%filter(!is.na(Code))),
-          le.paste("Video/deck.cameras/Drop.out.events_table_camera2.csv"),row.names = F)
-
-write.csv(fun.table.ret.disc(d=Video.subsurface%>%filter(!is.na(Code))),
-          le.paste("Video/deck.cameras/Drop.out.events_table_subsurface.csv"),row.names = F)
-
-  #1.4 Drop outs fate
-p=fn.plt.dropouts(d=Video.subsurface%>%filter(!dropout=='No'),
-                  TITLE="Subsurface camera",
-                  LegPos="top",
-                  var='Dropout.condition',
-                  MinN=1)
-p+theme(plot.title=element_text(hjust = -.25))
-ggsave(le.paste("Video/deck.cameras/Drop.out.events_fate_subsurface.tiff"),width = 10,height = 8,compression = "lzw")
-
-
-  #2. Gaffing of drop outs
-    #subsurface camera
-p1=fn.plt.dropouts(d=Video.subsurface%>%
-                     filter(!(Genus=='Heterodontus' & Gaffed=='yes'))%>%
-                     filter(!is.na(Gaffed))%>%
-                     filter(dropout=='Yes')%>%
-                     mutate(Gaffed=capitalize(Gaffed),
-                            Gaffed=ifelse(Gaffed=="Yes","Gaffed","Lost"),
-                            Gaffed=factor(Gaffed,levels=c("Lost","Gaffed"))),
-                   TITLE="Subsurface camera",
-                   LegPos="top",
-                   var='Gaffed',
-                   MinN=1)
-p1=p1+theme(plot.title=element_text(hjust = -.25))
-#ggsave(le.paste("Video/deck.cameras/Drop.out.events_gaffing_subsurface.tiff"),width = 10,height = 8,compression = "lzw")
- 
-    #deck camera 2  
-p2=fn.plt.dropouts(d=Video.camera2.deck%>%
-                      mutate(Gaffed=case_when(dropout=='Yes' & gaffed%in%c('No') ~  'Lost',
-                                              dropout=='Yes' & gaffed%in%c('Yes') ~  'Gaffed',
-                                              TRUE ~ gaffed))%>%
-                      filter(!is.na(gaffed) & dropout=='Yes'),
-                  TITLE="Deck camera 2",
-                  LegPos="top",
-                  var='Gaffed',
-                  MinN=1)
-p2=p2+theme(plot.title=element_text(hjust = -.25))
-
-fig=ggarrange(p1+rremove("xlab"), p2+rremove("xlab"),
-              ncol = 1, nrow = 2,
-              common.legend=TRUE)
-annotate_figure(fig,bottom = text_grob("Number of events",size = 18))
-ggsave(le.paste("Video/deck.cameras/Drop.out.events_gaffing.tiff"),width = 10,height = 8,compression = "lzw")
-
-
-  #3. Composition around weight or float
-# Display data
-Data_water.column=Video.camera2.deck%>%
-            filter(!SHEET_NO%in%No.good.water.column)%>%
-            mutate(Code=ifelse(Code==37018001,37018003,Code),
-                   water.column=tolower(hook.distance.to.float.weight))%>%
-            filter(!is.na(water.column))
-these.compo.sp=Data_water.column%>%
-  group_by(Code)%>%
-  tally()%>%
-  filter(n>=Min.obs.comp.wei.flot)%>%
-  pull(Code)
-names(these.compo.sp)=All.species.names[match(these.compo.sp,All.species.names$Code),"COMMON_NAME"]
-Col.vec=these.compo.sp
-Col.vec=ifelse(Col.vec<37049001,"firebrick","steelblue")
-Data_water.column=Data_water.column%>%
-  filter(Code%in%these.compo.sp)%>%
-  left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
-  mutate(COMMON_NAME=factor(COMMON_NAME,levels=names(these.compo.sp)))
-Data_water.column%>%
-        group_by(Code,water.column,Period,COMMON_NAME)%>%
-        tally()%>%
-        mutate(water.column=factor(water.column,levels=c("1w","2w","3w","1f","2f","3f")),
-               Period=capitalize(Period))%>%
-        ggplot(aes(fill=water.column, y=n, x=COMMON_NAME)) + 
-        geom_bar(position="stack", stat="identity")+
-        coord_flip() +
-        facet_wrap(~Period,dir='h',scales='free_x')+ 
-        theme_PA(str.siz=20,strx.siz=20,
-                 leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
-        theme(legend.position = "top",
-              legend.title = element_blank())+
-        scale_fill_manual(values=c("orange","firebrick2","firebrick4","lightblue2","deepskyblue2","dodgerblue4"))+
-        xlab('')+ylab('Number of events')+ 
-        guides(fill = guide_legend(nrow = 1, byrow = TRUE))
-ggsave(le.paste("Video/deck.cameras/Weight_float_species.events.tiff"),width = 10,height = 8,compression = "lzw")
-
   #fit binomial glm
-Data_water.column=Data_water.column%>%
-  left_join(DATA%>%
-              filter(sheet_no%in%Data_water.column$SHEET_NO)%>%
-              distinct(sheet_no,botdepth),
-            by=c("SHEET_NO"="sheet_no"))%>%
-  mutate(Position=ifelse(grepl('w',water.column),"weight","float"))
-
-glm.dat=Data_water.column%>% 
-            mutate(N=1)%>%
-            dplyr::select(COMMON_NAME,N,Position,botdepth)%>%
-            group_by(COMMON_NAME,Position)%>%
-            summarise(N=sum(N))%>%
-            spread(Position,N,fill=0)%>%
-            mutate(COMMON_NAME=factor(as.character(COMMON_NAME)))
-Mod <- glm( cbind(float, weight) ~ COMMON_NAME, data = glm.dat, family = "binomial")  
-
-  #Predict species
-Pred=summary(emmeans(Mod, 'COMMON_NAME', type="response"))
-p=fn.barplot.cpue(d=Pred%>%
-                    left_join(data.frame(COMMON_NAME=names(Col.vec),Col=Col.vec),
-                              by='COMMON_NAME')%>%
-                    mutate(Group=Col,
-                           x=COMMON_NAME,
-                           species=COMMON_NAME,
-                           y=1-prob,
-                           fill=Group,
-                           facet="Longline",
-                           lower.CL=1-asymp.LCL,
-                           upper.CL=1-asymp.UCL),
-                  YLAB="Probability of capture near a weight",
-                  XLAB='',
-                  cex=18,
-                  Rotate='Yes',
-                  Relative="No",
-                  RETURN=FALSE)
-fn.fig(le.paste("Video/deck.cameras/Weight_float_species_predictions"),2400,2400)
-p+scale_fill_manual(values=c("firebrick","steelblue"))+
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-dev.off()
-
-  #Export anova table
-ft <- as_flextable(Mod)
-save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/Weight_float_species.png"))
-#save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/Weight_float_species.docx"))
-
-
-
-  #4. Rates of depredation, bait loss and drop outs  
-#Underwater camera
-
-Depredation=c('Caught while predating','Predated on')  
-#Depredation=c(Depredation,'Feeding') # From Sarah "The 'Feeding' behaviour should have only been used in the longlines as it 
-                                      # indicated when a fish fed from the bait on the longline hooks"
-Depredation.species.net=Video.net.interaction%>%
-                          filter(Interaction%in%Depredation)%>%
-                          dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
-                          arrange(Interaction)
-Depredation.species.line=Video.longline.interaction%>%
-                          filter(Interaction%in%Depredation)%>%
-                          dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
-                          arrange(Interaction)
-
-#1. All shots (to add 0 observations)
-All.underwater.shts=rbind(Video.longline.interaction%>%
-                            distinct(Camera,sheet_no,Method,soak.time),
-                          Video.net.interaction%>%
-                            distinct(Camera,sheet_no,Method,soak.time))%>%
-  mutate(Method=capitalize(Method))%>%
-  filter(!is.na(sheet_no))%>%
-  mutate(n=1)%>%
-  group_by(Method,sheet_no)%>%
-  summarise(N.cameras=sum(n),
-            soak.time=max(soak.time,na.rm=T))%>%
-  ungroup()%>%
-  mutate(Effort=case_when(Method=='Longline'~N.cameras*soak.time*hooks.observed,  
-                          Method=='Gillnet'~N.cameras*soak.time*metres.observed))
-
-Observed.underwater.gillnet_m.gn.hour=sum(All.underwater.shts%>%filter(Method=='Gillnet')%>%pull(Effort))
-Observed.underwater.longline_hook.hour=sum(All.underwater.shts%>%filter(Method=='Longline')%>%pull(Effort))
-  
-#2. Bait loss (in # of baits lost per hook hour)
-Rate.under_bait.loss=rbind(Video.longline.interaction%>%
-                             distinct(Camera,sheet_no,Method,soak.time,Interaction),
-                           Video.net.interaction%>%
-                             distinct(Camera,sheet_no,Method,soak.time,Interaction))%>%
-  filter(Interaction=="Bait feeding")%>%
-  mutate(Number=1,
-         Method=capitalize(Method))
-Rate.under_bait.loss=Rate.under_bait.loss%>%
-  left_join(All.underwater.shts%>%
-              filter(sheet_no%in%unique(Rate.under_bait.loss$sheet_no))%>%
-              dplyr::select(sheet_no,N.cameras),by='sheet_no')%>%
-  group_by(sheet_no,Method,Interaction)%>%
-  summarise(n=sum(Number),
-            soak.time=max(soak.time),
-            N.cameras=max(N.cameras))%>%
-  mutate(Effort=case_when(Method=='Longline'~soak.time*hooks.observed*N.cameras,
-                          Method=='Gillnet'~soak.time*metres.observed*N.cameras))
-
-Bait.loss.rate_under=unique(rbind(Rate.under_bait.loss%>%
-                                    dplyr::select(Method,sheet_no,n,Effort),
-                                  All.underwater.shts%>%     #add observed 0 records
-                                    filter(Method=='Longline' & !sheet_no%in%Rate.under_bait.loss$sheet_no)%>%
-                                    mutate(n=0)%>%
-                                    dplyr::select(Method,sheet_no,n,Effort))%>%
-                              ungroup()%>%
-                              mutate(Rate=sum(n)/sum(Effort,na.rm=T))%>%
-                              pull(Rate))
-
-
-#3. Drop outs and depredation (in # of individuals per m hour or hook hour)   
-Rate.under=rbind(Video.longline.interaction%>%
-                   distinct(Camera,sheet_no,Method,soak.time,Interaction),
-                 Video.net.interaction%>%
-                   distinct(Camera,sheet_no,Method,soak.time,Interaction))%>%
-  filter(Interaction%in%c(Depredation,"Dropout"))%>%
-  mutate(Number=1,
-         Method=capitalize(Method),
-         Interaction=ifelse(Interaction%in%Depredation,
-                            "Depredation",Interaction))
-Rate.under=Rate.under%>%
-  left_join(All.underwater.shts%>%
-              filter(sheet_no%in%unique(Rate.under$sheet_no))%>%
-              dplyr::select(sheet_no,N.cameras),by='sheet_no')%>%
-  group_by(sheet_no,Method,Interaction)%>%
-  summarise(n=sum(Number),
-            soak.time=max(soak.time),
-            N.cameras=max(N.cameras))%>%
-  mutate(Effort=case_when(Method=='Longline'~soak.time*hooks.observed*N.cameras,
-                          Method=='Gillnet'~soak.time*metres.observed*N.cameras))
-
-Drop.out.rate_under=rbind(Rate.under%>%
-                            filter(Interaction=='Dropout')%>%
-                            dplyr::select(Method,sheet_no,n,Effort),
-                          All.underwater.shts%>%     #add observed 0 records
-                            filter(!sheet_no%in%Rate.under$sheet_no)%>%
-                            mutate(n=0)%>%
-                            dplyr::select(Method,sheet_no,n,Effort))%>%
-  group_by(Method)%>%
-  summarise(Rate=sum(n)/sum(Effort))
-
-
-Drepedation.rate_under=rbind(Rate.under%>%
-                               filter(Interaction=='Depredation')%>%
-                               dplyr::select(Method,sheet_no,n,Effort),
-                             All.underwater.shts%>%     #add observed 0 records
-                               filter(!sheet_no%in%Rate.under$sheet_no)%>%
-                               mutate(n=0)%>%
-                               dplyr::select(Method,sheet_no,n,Effort))%>%
-  group_by(Method)%>%
-  summarise(Rate=sum(n)/sum(Effort))
-
-#4. Tabulate all events
-Tab.out=data.frame(Event=c("Bait loss",
-                           rep("Drepedation",2),
-                           rep("Drop outs",2)),
-                   Method=c("Longline",
-                            "Gillnet","Longline",
-                            "Gillnet","Longline"),
-                   Rate=c(Bait.loss.rate_under,
-                              Drepedation.rate_under%>%filter(Method=="Gillnet")%>%pull(Rate),
-                              Drepedation.rate_under%>%filter(Method=="Longline")%>%pull(Rate),
-                              Drop.out.rate_under%>%filter(Method=="Gillnet")%>%pull(Rate),
-                              Drop.out.rate_under%>%filter(Method=="Longline")%>%pull(Rate)),
-                   Units=c("Number of lost baits per 1 hook hour",
-                           "Number of depredated individuals per 1 m hour","Number of depredated individuals per 1 hook hour",
-                           "Number of dropouts per 1 m hour","Number of dropouts per 1 hook hour"))%>%
-  mutate(Rate=round(Rate,6),
-         Observed.underwater.effort=ifelse(Method=='Gillnet',Observed.underwater.gillnet_m.gn.hour,
-                                    ifelse(Method=='Longline',Observed.underwater.longline_hook.hour,
-                                    NA)),
-         Observed.underwater.effort.units=ifelse(Method=='Gillnet','m.gn.hour',
-                                           ifelse(Method=='Longline','hook.hour',
-                                                  NA)))
-write.csv(Tab.out%>%
-            filter(Event=='Drop outs')%>%
-            dplyr::select(-Event),
-          le.paste("Video/underwater/Rate_Drop.out.csv"),row.names=F)
-write.csv(Tab.out%>%
-            filter(Event=='Drepedation')%>%
-            dplyr::select(-Event),
-          le.paste("Video/underwater/Rate_Drepedation.csv"),row.names=F)
-write.csv(Tab.out%>%
-            filter(Event=='Bait loss')%>%
-            dplyr::select(-Event),
-          le.paste("Video/underwater/Rate_Bait.loss.csv"),row.names=F)
-rm(Tab.out)
-
-#Subsurface and deck 2 cameras (effort is 1 m or 1 hook per hauling hour)  
-All.shts=DATA%>%
-  distinct(sheet_no,method,haul.time,haul.time.end,net_length,n.hooks)%>%
-  mutate(method=ifelse(method=="GN","Gillnet",ifelse(method=="LL","Longline",NA)),
-         haul.time.end=as.POSIXct(haul.time.end, format = "%H:%M"),
-         haul.time=as.POSIXct(haul.time, format = "%H:%M"),
-         haul=difftime(haul.time.end,haul.time,units='hours'))%>%
-  filter(!(method=='LL' & n.hooks==0))%>%
-  group_by(method)%>%
-  mutate(Mean.haul=mean(haul,na.rm=T))%>%
-  ungroup()%>%
-  mutate(haul=ifelse(is.na(haul),Mean.haul,haul))%>%
-  filter(!is.na(sheet_no))%>%
-  group_by(method,sheet_no)%>%
-  summarise(net_length=max(net_length,na.rm=T),
-            n.hooks=max(n.hooks,na.rm=T),
-            haul=max(haul,na.rm=T))%>%
-  ungroup()%>%
-  mutate(Effort=case_when(method=='Longline'~haul*n.hooks,
-                          method=='Gillnet'~haul*net_length*1000))%>%
-  dplyr::select(sheet_no,method,Effort)%>%
-  filter(Effort>0)
-
-
-fn.rates_sub_deck2=function(d,MinN)
-{
-  these.drop.out.sp=table(d$Code)
-  these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
-  names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
-  
-  d1=d%>%
-    filter(Code%in%these.drop.out.sp & dropout=="Yes")%>%
-    mutate(Method=capitalize(Period))%>%
-    group_by(Code,Method)%>%
-    tally()%>%
-    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
-    ungroup()%>%
-    left_join(All.shts%>%
-                filter(sheet_no%in%unique(d$sheet_no))%>%
-                group_by(method)%>%
-                summarise(Effort=sum(Effort))%>%
-                ungroup(),
-              by=c('Method'='method'))%>%
-    mutate(Rate=n/Effort)%>%
-    dplyr::select(-Code,-n,-Effort)%>%
-    spread(Method,Rate,fill=0)%>%
+  Data_water.column=Data_water.column%>%
     left_join(DATA%>%
-                distinct(common_name,Taxa),by=c('COMMON_NAME'='common_name'))%>%
+                filter(sheet_no%in%Data_water.column$SHEET_NO)%>%
+                distinct(sheet_no,botdepth),
+              by=c("SHEET_NO"="sheet_no"))%>%
+    mutate(Position=ifelse(grepl('w',water.column),"weight","float"))
+  
+  glm.dat=Data_water.column%>% 
+    mutate(N=1)%>%
+    dplyr::select(COMMON_NAME,N,Position,botdepth)%>%
+    group_by(COMMON_NAME,Position)%>%
+    summarise(N=sum(N))%>%
+    spread(Position,N,fill=0)%>%
+    mutate(COMMON_NAME=factor(as.character(COMMON_NAME)))
+  Mod <- glm( cbind(float, weight) ~ COMMON_NAME, data = glm.dat, family = "binomial")  
+  
+  #Predict species
+  Pred=summary(emmeans(Mod, 'COMMON_NAME', type="response"))
+  p=fn.barplot.cpue(d=Pred%>%
+                      left_join(data.frame(COMMON_NAME=names(Col.vec),Col=Col.vec),
+                                by='COMMON_NAME')%>%
+                      mutate(Group=Col,
+                             x=COMMON_NAME,
+                             species=COMMON_NAME,
+                             y=1-prob,
+                             fill=Group,
+                             facet="Longline",
+                             lower.CL=1-asymp.LCL,
+                             upper.CL=1-asymp.UCL),
+                    YLAB="Probability of capture near a weight",
+                    XLAB='',
+                    cex=18,
+                    Rotate='Yes',
+                    Relative="No",
+                    RETURN=FALSE)
+  fn.fig(le.paste("Video/deck.cameras/Weight_float_species_predictions"),2400,2400)
+  p+scale_fill_manual(values=c("firebrick","steelblue"))+
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+  dev.off()
+  
+  #Export anova table
+  ft <- as_flextable(Mod)
+  save_as_image(ft, path = le.paste("Video/deck.cameras/anovas/Weight_float_species.png"))
+  #save_as_docx(ft,path = le.paste("Video/deck.cameras/anovas/Weight_float_species.docx"))
+  
+  
+  
+  #4. Rates of depredation, bait loss and drop outs  
+  #Underwater camera
+  
+  Depredation=c('Caught while predating','Predated on')  
+  #Depredation=c(Depredation,'Feeding') # From Sarah "The 'Feeding' behaviour should have only been used in the longlines as it 
+  # indicated when a fish fed from the bait on the longline hooks"
+  Depredation.species.net=Video.net.interaction%>%
+    filter(Interaction%in%Depredation)%>%
+    dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
+    arrange(Interaction)
+  Depredation.species.line=Video.longline.interaction%>%
+    filter(Interaction%in%Depredation)%>%
+    dplyr::select(original.interaction,Interaction,Interaction2,taxa.to.mutate,Comment)%>%
+    arrange(Interaction)
+  
+  #1. All shots (to add 0 observations)
+  All.underwater.shts=rbind(Video.longline.interaction%>%
+                              distinct(Camera,sheet_no,Method,soak.time),
+                            Video.net.interaction%>%
+                              distinct(Camera,sheet_no,Method,soak.time))%>%
+    mutate(Method=capitalize(Method))%>%
+    filter(!is.na(sheet_no))%>%
+    mutate(n=1)%>%
+    group_by(Method,sheet_no)%>%
+    summarise(N.cameras=sum(n),
+              soak.time=max(soak.time,na.rm=T))%>%
     ungroup()%>%
-    arrange(Taxa)%>%
-    dplyr::select(-Taxa)
-  return(d1)
+    mutate(Effort=case_when(Method=='Longline'~N.cameras*soak.time*hooks.observed,  
+                            Method=='Gillnet'~N.cameras*soak.time*metres.observed))
+  
+  Observed.underwater.gillnet_m.gn.hour=sum(All.underwater.shts%>%filter(Method=='Gillnet')%>%pull(Effort))
+  Observed.underwater.longline_hook.hour=sum(All.underwater.shts%>%filter(Method=='Longline')%>%pull(Effort))
+  
+  #2. Bait loss (in # of baits lost per hook hour)
+  Rate.under_bait.loss=rbind(Video.longline.interaction%>%
+                               distinct(Camera,sheet_no,Method,soak.time,Interaction),
+                             Video.net.interaction%>%
+                               distinct(Camera,sheet_no,Method,soak.time,Interaction))%>%
+    filter(Interaction=="Bait feeding")%>%
+    mutate(Number=1,
+           Method=capitalize(Method))
+  Rate.under_bait.loss=Rate.under_bait.loss%>%
+    left_join(All.underwater.shts%>%
+                filter(sheet_no%in%unique(Rate.under_bait.loss$sheet_no))%>%
+                dplyr::select(sheet_no,N.cameras),by='sheet_no')%>%
+    group_by(sheet_no,Method,Interaction)%>%
+    summarise(n=sum(Number),
+              soak.time=max(soak.time),
+              N.cameras=max(N.cameras))%>%
+    mutate(Effort=case_when(Method=='Longline'~soak.time*hooks.observed*N.cameras,
+                            Method=='Gillnet'~soak.time*metres.observed*N.cameras))
+  
+  Bait.loss.rate_under=unique(rbind(Rate.under_bait.loss%>%
+                                      dplyr::select(Method,sheet_no,n,Effort),
+                                    All.underwater.shts%>%     #add observed 0 records
+                                      filter(Method=='Longline' & !sheet_no%in%Rate.under_bait.loss$sheet_no)%>%
+                                      mutate(n=0)%>%
+                                      dplyr::select(Method,sheet_no,n,Effort))%>%
+                                ungroup()%>%
+                                mutate(Rate=sum(n)/sum(Effort,na.rm=T))%>%
+                                pull(Rate))
+  
+  
+  #3. Drop outs and depredation (in # of individuals per m hour or hook hour)   
+  Rate.under=rbind(Video.longline.interaction%>%
+                     distinct(Camera,sheet_no,Method,soak.time,Interaction),
+                   Video.net.interaction%>%
+                     distinct(Camera,sheet_no,Method,soak.time,Interaction))%>%
+    filter(Interaction%in%c(Depredation,"Dropout"))%>%
+    mutate(Number=1,
+           Method=capitalize(Method),
+           Interaction=ifelse(Interaction%in%Depredation,
+                              "Depredation",Interaction))
+  Rate.under=Rate.under%>%
+    left_join(All.underwater.shts%>%
+                filter(sheet_no%in%unique(Rate.under$sheet_no))%>%
+                dplyr::select(sheet_no,N.cameras),by='sheet_no')%>%
+    group_by(sheet_no,Method,Interaction)%>%
+    summarise(n=sum(Number),
+              soak.time=max(soak.time),
+              N.cameras=max(N.cameras))%>%
+    mutate(Effort=case_when(Method=='Longline'~soak.time*hooks.observed*N.cameras,
+                            Method=='Gillnet'~soak.time*metres.observed*N.cameras))
+  
+  Drop.out.rate_under=rbind(Rate.under%>%
+                              filter(Interaction=='Dropout')%>%
+                              dplyr::select(Method,sheet_no,n,Effort),
+                            All.underwater.shts%>%     #add observed 0 records
+                              filter(!sheet_no%in%Rate.under$sheet_no)%>%
+                              mutate(n=0)%>%
+                              dplyr::select(Method,sheet_no,n,Effort))%>%
+    group_by(Method)%>%
+    summarise(Rate=sum(n)/sum(Effort))
+  
+  
+  Drepedation.rate_under=rbind(Rate.under%>%
+                                 filter(Interaction=='Depredation')%>%
+                                 dplyr::select(Method,sheet_no,n,Effort),
+                               All.underwater.shts%>%     #add observed 0 records
+                                 filter(!sheet_no%in%Rate.under$sheet_no)%>%
+                                 mutate(n=0)%>%
+                                 dplyr::select(Method,sheet_no,n,Effort))%>%
+    group_by(Method)%>%
+    summarise(Rate=sum(n)/sum(Effort))
+  
+  #4. Tabulate all events
+  Tab.out=data.frame(Event=c("Bait loss",
+                             rep("Drepedation",2),
+                             rep("Drop outs",2)),
+                     Method=c("Longline",
+                              "Gillnet","Longline",
+                              "Gillnet","Longline"),
+                     Rate=c(Bait.loss.rate_under,
+                            Drepedation.rate_under%>%filter(Method=="Gillnet")%>%pull(Rate),
+                            Drepedation.rate_under%>%filter(Method=="Longline")%>%pull(Rate),
+                            Drop.out.rate_under%>%filter(Method=="Gillnet")%>%pull(Rate),
+                            Drop.out.rate_under%>%filter(Method=="Longline")%>%pull(Rate)),
+                     Units=c("Number of lost baits per 1 hook hour",
+                             "Number of depredated individuals per 1 m hour","Number of depredated individuals per 1 hook hour",
+                             "Number of dropouts per 1 m hour","Number of dropouts per 1 hook hour"))%>%
+    mutate(Rate=round(Rate,6),
+           Observed.underwater.effort=ifelse(Method=='Gillnet',Observed.underwater.gillnet_m.gn.hour,
+                                             ifelse(Method=='Longline',Observed.underwater.longline_hook.hour,
+                                                    NA)),
+           Observed.underwater.effort.units=ifelse(Method=='Gillnet','m.gn.hour',
+                                                   ifelse(Method=='Longline','hook.hour',
+                                                          NA)))
+  write.csv(Tab.out%>%
+              filter(Event=='Drop outs')%>%
+              dplyr::select(-Event),
+            le.paste("Video/underwater/Rate_Drop.out.csv"),row.names=F)
+  write.csv(Tab.out%>%
+              filter(Event=='Drepedation')%>%
+              dplyr::select(-Event),
+            le.paste("Video/underwater/Rate_Drepedation.csv"),row.names=F)
+  write.csv(Tab.out%>%
+              filter(Event=='Bait loss')%>%
+              dplyr::select(-Event),
+            le.paste("Video/underwater/Rate_Bait.loss.csv"),row.names=F)
+  rm(Tab.out)
+  
+  #Subsurface and deck 2 cameras (effort is 1 m or 1 hook per hauling hour)  
+  All.shts=DATA%>%
+    distinct(sheet_no,method,haul.time,haul.time.end,net_length,n.hooks)%>%
+    mutate(method=ifelse(method=="GN","Gillnet",ifelse(method=="LL","Longline",NA)),
+           haul.time.end=as.POSIXct(haul.time.end, format = "%H:%M"),
+           haul.time=as.POSIXct(haul.time, format = "%H:%M"),
+           haul=difftime(haul.time.end,haul.time,units='hours'))%>%
+    filter(!(method=='LL' & n.hooks==0))%>%
+    group_by(method)%>%
+    mutate(Mean.haul=mean(haul,na.rm=T))%>%
+    ungroup()%>%
+    mutate(haul=ifelse(is.na(haul),Mean.haul,haul))%>%
+    filter(!is.na(sheet_no))%>%
+    group_by(method,sheet_no)%>%
+    summarise(net_length=max(net_length,na.rm=T),
+              n.hooks=max(n.hooks,na.rm=T),
+              haul=max(haul,na.rm=T))%>%
+    ungroup()%>%
+    mutate(Effort=case_when(method=='Longline'~haul*n.hooks,
+                            method=='Gillnet'~haul*net_length*1000))%>%
+    dplyr::select(sheet_no,method,Effort)%>%
+    filter(Effort>0)
+  
+  
+  fn.rates_sub_deck2=function(d,MinN)
+  {
+    these.drop.out.sp=table(d$Code)
+    these.drop.out.sp=as.numeric(names(these.drop.out.sp[these.drop.out.sp>MinN]))
+    names(these.drop.out.sp)=All.species.names[match(these.drop.out.sp,All.species.names$Code),"COMMON_NAME"]
+    
+    d1=d%>%
+      filter(Code%in%these.drop.out.sp & dropout=="Yes")%>%
+      mutate(Method=capitalize(Period))%>%
+      group_by(Code,Method)%>%
+      tally()%>%
+      left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by="Code")%>%
+      ungroup()%>%
+      left_join(All.shts%>%
+                  filter(sheet_no%in%unique(d$sheet_no))%>%
+                  group_by(method)%>%
+                  summarise(Effort=sum(Effort))%>%
+                  ungroup(),
+                by=c('Method'='method'))%>%
+      mutate(Rate=n/Effort)%>%
+      dplyr::select(-Code,-n,-Effort)%>%
+      spread(Method,Rate,fill=0)%>%
+      left_join(DATA%>%
+                  distinct(common_name,Taxa),by=c('COMMON_NAME'='common_name'))%>%
+      ungroup()%>%
+      arrange(Taxa)%>%
+      dplyr::select(-Taxa)
+    return(d1)
+  }
+  
+  Drop.out.rate_deck2=fn.rates_sub_deck2(d=Video.camera2.deck%>%rename(sheet_no=SHEET_NO),
+                                         MinN=Min.N.drop.out)
+  Drop.out.rate_deck2=rbind(Drop.out.rate_deck2%>%mutate_if(is.numeric, round,5),
+                            Drop.out.rate_deck2[1,]%>%
+                              mutate(COMMON_NAME="Units",
+                                     Gillnet="Number of dropouts per 1 m haul-hour",
+                                     Longline="Number of dropouts per 1 hook haul-hour"))
+  Observed.deck2.gillnet_km.gn.hour=sum(All.shts%>%
+                                          filter(sheet_no%in%unique(Video.camera2.deck$SHEET_NO) & method=='Gillnet')%>%
+                                          pull(Effort))/1000
+  Observed.deck2.longline_hook.hour=sum(All.shts%>%
+                                          filter(sheet_no%in%unique(Video.camera2.deck$SHEET_NO) & method=='Longline')%>%
+                                          pull(Effort))
+  write.csv(Drop.out.rate_deck2%>%
+              mutate(Observed.deck2.effort_Gillnet_km.gn.hour=Observed.deck2.gillnet_km.gn.hour,
+                     Observed.deck2.effort_Longline_hook.hour=Observed.deck2.longline_hook.hour),
+            le.paste("Video/deck.cameras/Rate_Drop.out_deck2.csv"),row.names=F)
+  
+  
+  Drop.out.rate_subsurface=fn.rates_sub_deck2(d=Video.subsurface%>%
+                                                rename(sheet_no=SHEET_NO)%>%
+                                                mutate(dropout=ifelse(dropout=='Gaffed','Yes',dropout)),
+                                              MinN=Min.N.drop.out)
+  Drop.out.rate_subsurface=rbind(Drop.out.rate_subsurface%>%mutate_if(is.numeric, round,5),
+                                 Drop.out.rate_subsurface[1,]%>%
+                                   mutate(COMMON_NAME="Units",
+                                          Gillnet="Number of dropouts per 1 m haul-hour",
+                                          Longline="Number of dropouts per 1 hook haul-hour"))
+  Observed.subsurface.gillnet_km.gn.hour=sum(All.shts%>%
+                                               filter(sheet_no%in%unique(Video.subsurface$SHEET_NO) & method=='Gillnet')%>%
+                                               pull(Effort))/1000
+  Observed.subsurface.longline_hook.hour=sum(All.shts%>%
+                                               filter(sheet_no%in%unique(Video.subsurface$SHEET_NO) & method=='Longline')%>%
+                                               pull(Effort))
+  
+  
+  write.csv(Drop.out.rate_subsurface%>%
+              mutate(Observed.subsurface.effort_Gillnet_km.gn.hour=Observed.subsurface.gillnet_km.gn.hour,
+                     Observed.subsurface.effort_Longline_hook.hour=Observed.subsurface.longline_hook.hour),
+            le.paste("Video/deck.cameras/Rate_Drop.out_subsurface.csv"),row.names=F)
+  
 }
-
-Drop.out.rate_deck2=fn.rates_sub_deck2(d=Video.camera2.deck%>%rename(sheet_no=SHEET_NO),
-                                       MinN=Min.N.drop.out)
-Drop.out.rate_deck2=rbind(Drop.out.rate_deck2%>%mutate_if(is.numeric, round,5),
-                          Drop.out.rate_deck2[1,]%>%
-                            mutate(COMMON_NAME="Units",
-                                   Gillnet="Number of dropouts per 1 m haul-hour",
-                                   Longline="Number of dropouts per 1 hook haul-hour"))
-Observed.deck2.gillnet_km.gn.hour=sum(All.shts%>%
-                                        filter(sheet_no%in%unique(Video.camera2.deck$SHEET_NO) & method=='Gillnet')%>%
-                                        pull(Effort))/1000
-Observed.deck2.longline_hook.hour=sum(All.shts%>%
-                                        filter(sheet_no%in%unique(Video.camera2.deck$SHEET_NO) & method=='Longline')%>%
-                                        pull(Effort))
-write.csv(Drop.out.rate_deck2%>%
-            mutate(Observed.deck2.effort_Gillnet_km.gn.hour=Observed.deck2.gillnet_km.gn.hour,
-                   Observed.deck2.effort_Longline_hook.hour=Observed.deck2.longline_hook.hour),
-          le.paste("Video/deck.cameras/Rate_Drop.out_deck2.csv"),row.names=F)
-
-
-Drop.out.rate_subsurface=fn.rates_sub_deck2(d=Video.subsurface%>%
-                                              rename(sheet_no=SHEET_NO)%>%
-                                              mutate(dropout=ifelse(dropout=='Gaffed','Yes',dropout)),
-                                            MinN=Min.N.drop.out)
-Drop.out.rate_subsurface=rbind(Drop.out.rate_subsurface%>%mutate_if(is.numeric, round,5),
-                               Drop.out.rate_subsurface[1,]%>%
-                                mutate(COMMON_NAME="Units",
-                                       Gillnet="Number of dropouts per 1 m haul-hour",
-                                       Longline="Number of dropouts per 1 hook haul-hour"))
-Observed.subsurface.gillnet_km.gn.hour=sum(All.shts%>%
-                                        filter(sheet_no%in%unique(Video.subsurface$SHEET_NO) & method=='Gillnet')%>%
-                                        pull(Effort))/1000
-Observed.subsurface.longline_hook.hour=sum(All.shts%>%
-                                        filter(sheet_no%in%unique(Video.subsurface$SHEET_NO) & method=='Longline')%>%
-                                        pull(Effort))
-
-
-write.csv(Drop.out.rate_subsurface%>%
-            mutate(Observed.subsurface.effort_Gillnet_km.gn.hour=Observed.subsurface.gillnet_km.gn.hour,
-                   Observed.subsurface.effort_Longline_hook.hour=Observed.subsurface.longline_hook.hour),
-          le.paste("Video/deck.cameras/Rate_Drop.out_subsurface.csv"),row.names=F)
 
 
 
 #---------Analysis of Deck 1 camera VS observers --------------------------------------------------------------------
-
-#   For paper:
-#     Try model: EM = OM + species group (either species, or genus or family) + day/night + boat + EM analysist
-#           Consider EM analysist to discuss potential bias (Abbey and Jack could remember species from when onboard).
-   
-
-# Get video shots with full battery life 
-D1.good.ones <- D1.cam.battery %>%
-  filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
-  mutate( LL = ifelse(str_detect(`DIPRD code`, "(?i)ll"), as.character(`DIPRD code`), as.character(NA)),
-          GN = ifelse(str_detect(`DIPRD code`, "(?i)gn"), as.character(`DIPRD code`), as.character(NA)),
-          sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL))) %>%
-  filter(!sheet_no=="GNPA0103")
-D2.good.ones <- D2.cam.battery %>% filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
-  mutate(LL = ifelse(str_detect(DPIRD.code, "(?i)ll"), as.character(DPIRD.code), as.character(NA)),
-         GN = ifelse(str_detect(DPIRD.code, "(?i)gn"), as.character(DPIRD.code), as.character(NA)),
-         sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL)))%>%
-  filter(!sheet_no=="GNPA0103")
-
-# Write csv for in meta but not df and vice versa
-do.check = FALSE
-if(do.check) {
-  d1meta <- unique(D1.cam.battery$`DIPRD code`)
-  d1df <- as.data.frame(unique(Video.camera1.deck$`DIPRD code`)) %>% separate("unique(Video.camera1.deck$`DIPRD code`)", c("code1", "code2"), sep = "/") %>% unlist()
-  write.csv(setdiff(d1meta, d1df), file = "U:/Shark/ParksAustralia_2019/d1.in.meta.but.not.df.csv")
-  write.csv(setdiff(d1df, d1meta), file = "U:/Shark/ParksAustralia_2019/d1.in.df.but.not.meta.csv")
-  d2meta <- unique(D2.cam.battery$DPIRD.code)
-  d2df <- as.data.frame(unique(Video.camera2.deck$DPIRD.code)) %>% separate( "unique(Video.camera2.deck$DPIRD.code)", c("code1", "code2"), sep = "/") %>% unlist()
-  write.csv(setdiff(d2meta, d2df), file = "U:/Shark/ParksAustralia_2019/d2.in.meta.but.not.df.csv")
-  write.csv(setdiff(d2df, d2meta), file = "U:/Shark/ParksAustralia_2019/d2.in.df.but.not.meta.csv")
-}
-
-
-# Deck 1  (pointing to deck)                      
-Video.camera1.deck=Video.camera1.deck%>%
-      mutate(Code=gsub('\\s+', '',Code),
-             Code=as.numeric(Code),
-             method = case_when(Period=='Gillnet'~ 'GN',
-                                Period=='Longline' ~ 'LL'))%>%
-      left_join(All.species.names%>%
-                  dplyr::select(COMMON_NAME,Code)%>%
-                  distinct(Code,.keep_all=T),
-                by="Code") %>% 
-      rename(DIPRD.code='DIPRD code')
-
-if(approach.camera.observer.comps=='Original')
+if(do.camera.VS.observer)
 {
+  # Get video shots with full battery life 
+  D1.good.ones <- D1.cam.battery %>%
+    filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
+    mutate( LL = ifelse(str_detect(`DIPRD code`, "(?i)ll"), as.character(`DIPRD code`), as.character(NA)),
+            GN = ifelse(str_detect(`DIPRD code`, "(?i)gn"), as.character(`DIPRD code`), as.character(NA)),
+            sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL))) %>%
+    filter(!sheet_no=="GNPA0103")
+  D2.good.ones <- D2.cam.battery %>% filter(str_detect(Full.LL, "(?i)y")|str_detect(Full.GN, "(?i)y")) %>% 
+    mutate(LL = ifelse(str_detect(DPIRD.code, "(?i)ll"), as.character(DPIRD.code), as.character(NA)),
+           GN = ifelse(str_detect(DPIRD.code, "(?i)gn"), as.character(DPIRD.code), as.character(NA)),
+           sheet_no = ifelse(is.na(LL), as.character(GN), as.character(LL)))%>%
+    filter(!sheet_no=="GNPA0103")
+  
+  # Write csv for in meta but not df and vice versa
+  do.check = FALSE
+  if(do.check) {
+    d1meta <- unique(D1.cam.battery$`DIPRD code`)
+    d1df <- as.data.frame(unique(Video.camera1.deck$`DIPRD code`)) %>% separate("unique(Video.camera1.deck$`DIPRD code`)", c("code1", "code2"), sep = "/") %>% unlist()
+    write.csv(setdiff(d1meta, d1df), file = "U:/Shark/ParksAustralia_2019/d1.in.meta.but.not.df.csv")
+    write.csv(setdiff(d1df, d1meta), file = "U:/Shark/ParksAustralia_2019/d1.in.df.but.not.meta.csv")
+    d2meta <- unique(D2.cam.battery$DPIRD.code)
+    d2df <- as.data.frame(unique(Video.camera2.deck$DPIRD.code)) %>% separate( "unique(Video.camera2.deck$DPIRD.code)", c("code1", "code2"), sep = "/") %>% unlist()
+    write.csv(setdiff(d2meta, d2df), file = "U:/Shark/ParksAustralia_2019/d2.in.meta.but.not.df.csv")
+    write.csv(setdiff(d2df, d2meta), file = "U:/Shark/ParksAustralia_2019/d2.in.df.but.not.meta.csv")
+  }
+  
+  
+  # Deck 1  (pointing to deck)                      
   Video.camera1.deck=Video.camera1.deck%>%
-    rename(DIPRD.code='DIPRD code')%>%
-    mutate(Period=ifelse(is.na(Period) & DIPRD.code=='GNPA003/LLPA0004','gillnet',Period),
-           DIPRD.code=ifelse(DIPRD.code=='GNPA003/LLPA0004','GNPA0003/LLPA0004',DIPRD.code),
-           Period=tolower(Period),
-           Period=ifelse(Period%in%c('longlien','ll','longlinr'),'longline',
-                         ifelse(Period%in%c('gillnet 2','gn'),'gillnet',
-                                Period)),
-           method=ifelse(Period=='gillnet','GN',
-                         ifelse(Period=='longline','LL',
-                                NA)),
-           meshed=tolower(meshed),
-           meshed=ifelse(meshed=='yes','gilled',meshed))          
+    mutate(Code=gsub('\\s+', '',Code),
+           Code=as.numeric(Code),
+           method = case_when(Period=='Gillnet'~ 'GN',
+                              Period=='Longline' ~ 'LL'))%>%
+    left_join(All.species.names%>%
+                dplyr::select(COMMON_NAME,Code)%>%
+                distinct(Code,.keep_all=T),
+              by="Code") %>% 
+    rename(DIPRD.code='DIPRD code')
   
-  Video.camera1=rbind(Video.camera1.deck_extra.records%>%
-                        rename(DIPRD.code='DIPRD code')%>%
-                        dplyr::select(DIPRD.code,Code,Period,number,condition),
-                      Video.camera1.deck%>%
-                        mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
-                        dplyr::select(DIPRD.code,Code,Period,number,condition))%>%
-    data.frame%>%
-    mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                              Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                              Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                              Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                              Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
-                              Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
-                              Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
-                              Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
-                              Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
-                              Code == 10000910 ~"Sponges"),
-           Period=tolower(Period),
-           Period=ifelse(Period=='gn','gillnet',
-                         ifelse(Period=='ll','longline',Period)),
-           sheet_no=case_when(Period=='gillnet'~str_remove(word(DIPRD.code,1,sep = "\\/"),'GN'),
-                              Period=='longline'~str_remove(word(DIPRD.code,2,sep = "\\/"),'LL')))%>%
-    left_join(DATA_PA,by='sheet_no')%>%
-    mutate(Data.set="camera",
-           Period=ifelse(Period=='gillnet' & method=='LL','longline',
-                         ifelse(Period=='longline' & method=='GN','gillnet',Period)))
-  
-}
-if(approach.camera.observer.comps=='Sarah')
-{
-  Video.camera1 <-rbind(Video.camera1.deck_extra.records%>%
+  if(approach.camera.observer.comps=='Original')
+  {
+    Video.camera1.deck=Video.camera1.deck%>%
+      rename(DIPRD.code='DIPRD code')%>%
+      mutate(Period=ifelse(is.na(Period) & DIPRD.code=='GNPA003/LLPA0004','gillnet',Period),
+             DIPRD.code=ifelse(DIPRD.code=='GNPA003/LLPA0004','GNPA0003/LLPA0004',DIPRD.code),
+             Period=tolower(Period),
+             Period=ifelse(Period%in%c('longlien','ll','longlinr'),'longline',
+                           ifelse(Period%in%c('gillnet 2','gn'),'gillnet',
+                                  Period)),
+             method=ifelse(Period=='gillnet','GN',
+                           ifelse(Period=='longline','LL',
+                                  NA)),
+             meshed=tolower(meshed),
+             meshed=ifelse(meshed=='yes','gilled',meshed))          
+    
+    Video.camera1=rbind(Video.camera1.deck_extra.records%>%
                           rename(DIPRD.code='DIPRD code')%>%
-                          dplyr::select(DIPRD.code,Code,Period,number,condition),Video.camera1.deck %>%
-                          dplyr::select(DIPRD.code,Code,Period,number,condition)) %>% 
-                data.frame%>%
-                separate(DIPRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
-                mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                                          Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                                          Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                          Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                                          Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
-                                          Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
-                                          Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
-                                          Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
-                                          Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
-                                          Code == 10000910 ~"Sponges"),
-                       Period=tolower(Period),
-                       sheet_no=case_when(Period == 'gillnet'~ substr(GN, 3, 8),
-                                          Period == 'longline'~ substr(LL, 3, 8))) %>% 
-                left_join(DATA_PA,by = 'sheet_no')%>%
-                mutate(Data.set = "camera",
-                       Period = ifelse(Period == 'gillnet' & method == 'LL','longline',
-                                       ifelse(Period == 'longline' & method == 'GN','gillnet', Period))) %>% 
-                mutate(filter.sheet_no = case_when(str_detect(Period, "(?i)long") ~ as.character(LL),
-                                                   str_detect(Period, "(?i)gill") ~ as.character(GN))) %>% 
-                filter(filter.sheet_no %in% D1.good.ones$sheet_no)
-}
-
-  #1. Export data for Abbey
-if(do.Abbeys)
-{
-  Abbey.data.chapter.2=rbind(Video.camera1%>%
-                               dplyr::rename(Number=number)%>%
-                               mutate(Method=capitalize(Period))%>%
-                               filter(Code>=3.7e7 & Code<=3.747e7)%>%  #compare only fish and sharks
-                               dplyr::select(sheet_no,Method,Data.set,Code,SP.group,Number),
-                             DATA%>%
-                               filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
-                               filter(Code>=3.7e7 & Code<=3.747e7)%>%     #compare only fish and sharks
-                               mutate(Number=1,
-                                      Data.set='Onboard.observer',
-                                      Method=ifelse(method=="GN","Gillnet",
-                                                    ifelse(method=="LL","Longline",
-                                                           NA)),
-                                      SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                                                         Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                                                         Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                                         Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish"))%>%
-                               dplyr::select(sheet_no,Method,Data.set,Code,SP.group,Number))%>%
-    mutate(Code=as.numeric(Code))
+                          dplyr::select(DIPRD.code,Code,Period,number,condition),
+                        Video.camera1.deck%>%
+                          mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
+                          dplyr::select(DIPRD.code,Code,Period,number,condition))%>%
+      data.frame%>%
+      mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
+                                Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
+                                Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
+                                Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
+                                Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
+                                Code == 10000910 ~"Sponges"),
+             Period=tolower(Period),
+             Period=ifelse(Period=='gn','gillnet',
+                           ifelse(Period=='ll','longline',Period)),
+             sheet_no=case_when(Period=='gillnet'~str_remove(word(DIPRD.code,1,sep = "\\/"),'GN'),
+                                Period=='longline'~str_remove(word(DIPRD.code,2,sep = "\\/"),'LL')))%>%
+      left_join(DATA_PA,by='sheet_no')%>%
+      mutate(Data.set="camera",
+             Period=ifelse(Period=='gillnet' & method=='LL','longline',
+                           ifelse(Period=='longline' & method=='GN','gillnet',Period)))
+    
+  }
+  if(approach.camera.observer.comps=='Sarah')
+  {
+    Video.camera1 <-rbind(Video.camera1.deck_extra.records%>%
+                            rename(DIPRD.code='DIPRD code')%>%
+                            dplyr::select(DIPRD.code,Code,Period,number,condition),Video.camera1.deck %>%
+                            dplyr::select(DIPRD.code,Code,Period,number,condition)) %>% 
+      data.frame%>%
+      separate(DIPRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
+      mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
+                                Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
+                                Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
+                                Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
+                                Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
+                                Code == 10000910 ~"Sponges"),
+             Period=tolower(Period),
+             sheet_no=case_when(Period == 'gillnet'~ substr(GN, 3, 8),
+                                Period == 'longline'~ substr(LL, 3, 8))) %>% 
+      left_join(DATA_PA,by = 'sheet_no')%>%
+      mutate(Data.set = "camera",
+             Period = ifelse(Period == 'gillnet' & method == 'LL','longline',
+                             ifelse(Period == 'longline' & method == 'GN','gillnet', Period))) %>% 
+      mutate(filter.sheet_no = case_when(str_detect(Period, "(?i)long") ~ as.character(LL),
+                                         str_detect(Period, "(?i)gill") ~ as.character(GN))) %>% 
+      filter(filter.sheet_no %in% D1.good.ones$sheet_no)
+  }
   
-  add.effort=DATA%>%
-    filter(sheet_no%in%unique(Abbey.data.chapter.2$sheet_no))%>%
-    mutate(Effort=ifelse(method=="GN",soak.time*net_length,
-                         ifelse(method=="LL",soak.time*n.hooks,
-                                NA)))%>%
-    group_by(sheet_no,method)%>%
-    summarise(Effort=max(Effort))%>%
-    mutate(Method=ifelse(method=="GN","Gillnet",
+  #1. Export data for Abbey
+  if(do.Abbeys)
+  {
+    Abbey.data.chapter.2=rbind(Video.camera1%>%
+                                 dplyr::rename(Number=number)%>%
+                                 mutate(Method=capitalize(Period))%>%
+                                 filter(Code>=3.7e7 & Code<=3.747e7)%>%  #compare only fish and sharks
+                                 dplyr::select(sheet_no,Method,Data.set,Code,SP.group,Number),
+                               DATA%>%
+                                 filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
+                                 filter(Code>=3.7e7 & Code<=3.747e7)%>%     #compare only fish and sharks
+                                 mutate(Number=1,
+                                        Data.set='Onboard.observer',
+                                        Method=ifelse(method=="GN","Gillnet",
+                                                      ifelse(method=="LL","Longline",
+                                                             NA)),
+                                        SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                                           Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                                           Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                                           Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish"))%>%
+                                 dplyr::select(sheet_no,Method,Data.set,Code,SP.group,Number))%>%
+      mutate(Code=as.numeric(Code))
+    
+    add.effort=DATA%>%
+      filter(sheet_no%in%unique(Abbey.data.chapter.2$sheet_no))%>%
+      mutate(Effort=ifelse(method=="GN",soak.time*net_length,
+                           ifelse(method=="LL",soak.time*n.hooks,
+                                  NA)))%>%
+      group_by(sheet_no,method)%>%
+      summarise(Effort=max(Effort))%>%
+      mutate(Method=ifelse(method=="GN","Gillnet",
+                           ifelse(method=="LL","Longline",
+                                  NA)))%>%
+      dplyr::rename(Fishing.effort=Effort)%>%
+      dplyr::select(-method)
+    Abbey.data.chapter.2_species=Abbey.data.chapter.2%>%
+      group_by(sheet_no,Method,Data.set,Code)%>%
+      summarise(Number=sum(Number))%>%
+      spread(Code,Number,fill = 0)%>%
+      data.frame%>%
+      left_join(add.effort,by=c('sheet_no','Method'))
+    Abbey.data.chapter.2_SP.group=Abbey.data.chapter.2%>%
+      group_by(sheet_no,Method,Data.set,SP.group)%>%
+      summarise(Number=sum(Number))%>%
+      spread(SP.group,Number,fill = 0)%>%
+      data.frame%>%
+      left_join(add.effort,by=c('sheet_no','Method'))
+    Abbey.data.chapter.2_Retain.group=Abbey.data.chapter.2%>%
+      left_join(Retained.tabl,by='Code')%>%
+      mutate(Retain.group=
+               ifelse(retained=='Yes' & SP.group%in% c('Sharks','Rays'),"Retained elasmobranch",
+                      ifelse(retained=='No' & SP.group%in% c('Sharks','Rays'),"Discarded elasmobranch",
+                             ifelse(retained=='Yes' & SP.group%in% c('Scalefish'),"Retained scalefish",   
+                                    ifelse(retained=='No' & SP.group%in% c('Scalefish'),"Discarded scalefish",
+                                           NA)))))%>%
+      group_by(sheet_no,Method,Data.set,Retain.group)%>%
+      summarise(Number=sum(Number))%>%
+      filter(!is.na(Retain.group))%>%
+      spread(Retain.group,Number,fill = 0)%>%
+      data.frame%>%
+      left_join(add.effort,by=c('sheet_no','Method'))
+    write.csv(Abbey.data.chapter.2_species,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_species.csv'),row.names = F)
+    write.csv(Abbey.data.chapter.2_SP.group,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_SP.group.csv'),row.names = F)
+    write.csv(Abbey.data.chapter.2_Retain.group,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_Retain.group.csv'),row.names = F)
+    
+  }
+  
+  #2 Barplot of observer VS camera
+  EM.vs.OM.DATA=DATA%>%
+    mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
+                                 grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
+                                 grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
+                                 grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
+                                 grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
+                                 grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
+                                 grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
+                                 grepl('boxfish',tolower(COMMON_NAME))~'Boxfishes',    #NEW
+                                 grepl('parrotfish',tolower(COMMON_NAME))~'Parrotfishes',   #NEW
+                                 grepl('boarfish',tolower(COMMON_NAME))~'Boarfishes',   #NEW
+                                 grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
+                                 grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
+                                 grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
+                                 grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
+                                 TRUE~COMMON_NAME))
+  Reset.disc.ret=EM.vs.OM.DATA%>% 
+    filter(!is.na(retainedflag))%>%
+    filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
+    group_by(retainedflag,COMMON_NAME)%>%
+    tally()%>%
+    ungroup()%>%
+    group_by(COMMON_NAME) %>%
+    slice(which.max(n)) %>%
+    arrange(COMMON_NAME,n)
+  Reset.disc.ret_RET=Reset.disc.ret%>%
+    filter(retainedflag=="Yes")%>%
+    pull(COMMON_NAME)
+  EM.vs.OM.DATA=EM.vs.OM.DATA%>%
+    mutate(retainedflag=ifelse(COMMON_NAME%in%Reset.disc.ret_RET,'Yes','No'))%>%
+    filter(taxa%in%c('Elasmobranch','Teleost'))
+  
+  EM.vs.OM.DATA=EM.vs.OM.DATA%>%
+    mutate(sheet_no=ifelse(sheet_no=="PA1109",'PA0109',sheet_no))  #same shot but data sheet split in 2
+  
+  EM.vs.OM.Video.camera1=Video.camera1%>%
+    filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
+    mutate(Code=as.numeric(Code))%>%
+    left_join(All.species.names%>%
+                dplyr::select(COMMON_NAME,Code)%>%
+                distinct(Code,.keep_all=T),
+              by="Code")%>%
+    mutate(method=ifelse(method=="GN","Gillnet",
                          ifelse(method=="LL","Longline",
                                 NA)))%>%
-    dplyr::rename(Fishing.effort=Effort)%>%
-    dplyr::select(-method)
-  Abbey.data.chapter.2_species=Abbey.data.chapter.2%>%
-    group_by(sheet_no,Method,Data.set,Code)%>%
-    summarise(Number=sum(Number))%>%
-    spread(Code,Number,fill = 0)%>%
-    data.frame%>%
-    left_join(add.effort,by=c('sheet_no','Method'))
-  Abbey.data.chapter.2_SP.group=Abbey.data.chapter.2%>%
-    group_by(sheet_no,Method,Data.set,SP.group)%>%
-    summarise(Number=sum(Number))%>%
-    spread(SP.group,Number,fill = 0)%>%
-    data.frame%>%
-    left_join(add.effort,by=c('sheet_no','Method'))
-  Abbey.data.chapter.2_Retain.group=Abbey.data.chapter.2%>%
-    left_join(Retained.tabl,by='Code')%>%
-    mutate(Retain.group=
-             ifelse(retained=='Yes' & SP.group%in% c('Sharks','Rays'),"Retained elasmobranch",
-                    ifelse(retained=='No' & SP.group%in% c('Sharks','Rays'),"Discarded elasmobranch",
-                           ifelse(retained=='Yes' & SP.group%in% c('Scalefish'),"Retained scalefish",   
-                                  ifelse(retained=='No' & SP.group%in% c('Scalefish'),"Discarded scalefish",
-                                         NA)))))%>%
-    group_by(sheet_no,Method,Data.set,Retain.group)%>%
-    summarise(Number=sum(Number))%>%
-    filter(!is.na(Retain.group))%>%
-    spread(Retain.group,Number,fill = 0)%>%
-    data.frame%>%
-    left_join(add.effort,by=c('sheet_no','Method'))
-  write.csv(Abbey.data.chapter.2_species,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_species.csv'),row.names = F)
-  write.csv(Abbey.data.chapter.2_SP.group,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_SP.group.csv'),row.names = F)
-  write.csv(Abbey.data.chapter.2_Retain.group,handl_OneDrive('Analyses/Parks Australia/outputs/Data for Abbey/Abbey.data.chapter.2_Retain.group.csv'),row.names = F)
+    mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
+                                 grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
+                                 grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
+                                 grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
+                                 grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
+                                 grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
+                                 grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
+                                 grepl('boxfish',tolower(COMMON_NAME))~'Boxfishes',    #NEW
+                                 grepl('parrotfish',tolower(COMMON_NAME))~'Parrotfishes',   #NEW
+                                 grepl('boarfish',tolower(COMMON_NAME))~'Boarfishes',   #NEW
+                                 grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
+                                 grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
+                                 grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
+                                 grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
+                                 TRUE~COMMON_NAME))
   
-}
-
-#2 Barplot of observer VS camera
-EM.vs.OM.DATA=DATA%>%
-  mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
-                               grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
-                               grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
-                               grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
-                               grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
-                               grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
-                               grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
-                               grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
-                               grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
-                               grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
-                               grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
-                               TRUE~COMMON_NAME))
-Reset.disc.ret=EM.vs.OM.DATA%>% 
-                filter(!is.na(retainedflag))%>%
-                filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
-                group_by(retainedflag,COMMON_NAME)%>%
-                tally()%>%
-                ungroup()%>%
-                group_by(COMMON_NAME) %>%
-                slice(which.max(n)) %>%
-                arrange(COMMON_NAME,n)
-Reset.disc.ret_RET=Reset.disc.ret%>%
-                    filter(retainedflag=="Yes")%>%
-                    pull(COMMON_NAME)
-EM.vs.OM.DATA=EM.vs.OM.DATA%>%
-  mutate(retainedflag=ifelse(COMMON_NAME%in%Reset.disc.ret_RET,'Yes','No'))%>%
-  filter(taxa%in%c('Elasmobranch','Teleost'))
-
-EM.vs.OM.DATA=EM.vs.OM.DATA%>%
-  mutate(sheet_no=ifelse(sheet_no=="PA1109",'PA0109',sheet_no))  #same shot but data sheet split in 2
-
-EM.vs.OM.Video.camera1=Video.camera1%>%
-                  filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
-                  mutate(Code=as.numeric(Code))%>%
-                  left_join(All.species.names%>%
-                              dplyr::select(COMMON_NAME,Code)%>%
-                              distinct(Code,.keep_all=T),
-                            by="Code")%>%
-                  mutate(method=ifelse(method=="GN","Gillnet",
-                                       ifelse(method=="LL","Longline",
-                                              NA)))%>%
-                  mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
-                                               grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
-                                               grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
-                                               grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
-                                               grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
-                                               grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
-                                               grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
-                                               grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
-                                               grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
-                                               grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
-                                               grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
-                                               TRUE~COMMON_NAME))
-
-TAB=EM.vs.OM.DATA%>%
-  filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
-  group_by(retainedflag,COMMON_NAME)%>%
-  tally()%>%
-  ungroup()
-TAB.comm=TAB%>%
-          filter(retainedflag=='Yes')%>%
-          arrange(-n)%>%
-          mutate(Cum=cumsum(n),
-                 Percent=100*Cum/sum(n))
-TAB.disc=TAB%>%
-  filter(retainedflag=='No' & !COMMON_NAME%in%TAB.comm$COMMON_NAME)%>%
-  arrange(-n)%>%
-  mutate(Cum=cumsum(n),
-         Percent=100*Cum/sum(n))
-
-fn.obs_cam.barplot=function(n.shots,Cam,Obs,LGN,TITL)
-{
-  LGN.LL=paste(' (',n.shots$LL,' shots)',sep='')
-  LGN.GN=paste(' (',n.shots$GN,' shots)',sep='')
-  N.other=length(This.sp.other)
-  d=rbind(Cam,Obs)%>%
-    mutate(Method.hour=ifelse(method=='Longline',paste(method,LGN.LL,sep=''),
-                       ifelse(method=='Gillnet',paste(method,LGN.GN,sep=''),
-                       NA)))%>%
-    filter(!is.na(method))%>%
-    mutate(COMMON_NAME=ifelse(!COMMON_NAME%in%This.sp.other,COMMON_NAME,paste0("Other (n=",N.other,' species)')))
-  p=d%>%
-    ggplot(aes(x=COMMON_NAME, y=n, fill=Platform)) + 
-    geom_bar(position="dodge", stat="identity")+
-    coord_flip() +
-    facet_wrap(~Method.hour,dir='h',scales='free_x')+ 
-    theme_PA(Ttl.siz=20,str.siz=16,strx.siz=16,
-             leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = LGN,
-          legend.justification='center',
-          legend.direction='horizontal',
-          legend.title = element_blank())+
-    xlab('')+ylab('Number of individuals')+
-    scale_y_continuous(breaks = integer_breaks())+
-    guides(fill = guide_legend(nrow = 1))+
-    scale_x_discrete(position = "top")
-  
-  if(!is.null(TITL)) p=p+ggtitle(TITL)
-  
-  return(p)
-}
-
-    #Commercial species
-This.sp=TAB.comm%>%pull(COMMON_NAME)
-This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
-p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
-                        distinct(sheet_no,method)%>%
-                        group_by(method)%>%
-                        tally()%>%
-                        spread(method,n),
-                      Cam=EM.vs.OM.Video.camera1%>% 
-                            filter(COMMON_NAME%in%This.sp)%>%
-                            group_by(COMMON_NAME,method)%>%
-                            summarise(n=sum(number))%>%
-                            mutate(Platform="Camera"),
-                      Obs=EM.vs.OM.DATA%>%
-                            filter(sheet_no%in%unique(Video.camera1$sheet_no) & 
-                                     COMMON_NAME%in%This.sp)%>%
-                            mutate(method=ifelse(method=="GN","Gillnet",
-                                          ifelse(method=="LL","Longline",
-                                          NA)))%>%
-                            group_by(COMMON_NAME,method)%>%
-                            summarise(n=sum(number))%>%
-                            mutate(Platform="Observer"),
-                      LGN="top",
-                      TITL="Commercial species")
-
-    #Bycatch species    
-This.sp=TAB.disc%>%pull(COMMON_NAME)
-This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
-p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
-                        distinct(sheet_no,method)%>%
-                        group_by(method)%>%
-                        tally()%>%
-                        spread(method,n),
-                      Cam=EM.vs.OM.Video.camera1%>%
-                        filter(COMMON_NAME%in%This.sp)%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Camera"),
-                      Obs=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera1$sheet_no) & 
-                                 COMMON_NAME%in%This.sp)%>%
-                        mutate(method=ifelse(method=="GN","Gillnet",
-                                             ifelse(method=="LL","Longline",
-                                                    NA)))%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Observer"),
-                      LGN="top",
-                      TITL="Discarded species")
-
-fig=ggarrange(p1+rremove("xlab"), p2+rremove("xlab"),
-              ncol = 1, nrow = 2,
-              common.legend=TRUE)
-annotate_figure(fig,bottom = text_grob("Number of individuals",size = 18))
-ggsave(le.paste("Camera_v_Observer/Barplot.tiff"),width = 12,height = 12,compression = "lzw")
-
-
-#3. Statistical comparison
-little.fn=function(d,Method,group,Not)
-{
-  n=d%>%
-    filter(method==Method)%>%
-    group_by(COMMON_NAME)%>%
-    summarise(Tot=sum(n))%>%
-    arrange(-Tot)%>%
-    mutate(Cumktch=cumsum(Tot)/sum(Tot))
-  if(group=='95')
-  {
-    what.species=n%>%mutate(species2=ifelse(Cumktch<=0.95,COMMON_NAME,'Other'))%>%pull(species2)
-  }
-  if(group=='Top20')
-  {
-    what.species=n%>%mutate(Row=1:n(),
-                            species2=ifelse(Row<=20,COMMON_NAME,'Other'))%>%pull(species2)
-  }
-  what.species=unique(what.species)
-  dd=d%>%
-    filter(method==Method)%>%
-    mutate(COMMON_NAME=ifelse(COMMON_NAME%in%what.species,COMMON_NAME,"Other"))%>%
-    group_by(COMMON_NAME,sheet_no,Platform)%>%
-    summarise(N=sum(n))%>%
-    spread(COMMON_NAME,N,fill=0)%>%
+  TAB=EM.vs.OM.DATA%>%
+    filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
+    group_by(retainedflag,COMMON_NAME)%>%
+    tally()%>%
     ungroup()
+  TAB.comm=TAB%>%
+    filter(retainedflag=='Yes')%>%
+    arrange(-n)%>%
+    mutate(Cum=cumsum(n),
+           Percent=100*Cum/sum(n))
+  TAB.disc=TAB%>%
+    filter(retainedflag=='No' & !COMMON_NAME%in%TAB.comm$COMMON_NAME)%>%
+    arrange(-n)%>%
+    mutate(Cum=cumsum(n),
+           Percent=100*Cum/sum(n))
   
-  dd$ColSum=rowSums(dd[-match(Not,names(dd))])
-  dd[-match(c(Not,'ColSum'),names(dd))]=dd[-match(c(Not,'ColSum'),names(dd))]/dd$ColSum
-  dd=dd%>%
-    dplyr::select(-ColSum)%>%
-    data.frame
-  return(dd)
-}
-D2=function(null,dev) (null-dev)/null
-fn.mod=function(dd,SBTL)
-{
-  #check_overdispersion(Pois.mod)
-  #Pois.mod <- glm(Camera ~ Observer * method, family=poisson(link = "identity"), data=d1) #identity link to assume linearity
-  #QuasiPois.mod <- glm(Camera ~ Observer * method, family=quasipoisson(link = "identity"), data=d1)
-  #NB.mod <- glm.nb(Camera ~ Observer * method, data=d1, link='identity')
-  
-  mod <- glm(Camera ~ Observer + method , family="gaussian", data=dd)
-  #mod <- glm(Camera ~ Observer + method + COMMON_NAME, family="gaussian", data=dd)
-  Over.dispesion=check_overdispersion(mod)
-  D2.mod=D2(mod$null.deviance,mod$deviance)
-  
-  pred=predict(mod,type='response',se.fit=T)
-  Preds=data.frame(Observer=dd$Observer,
-                   method=dd$method)%>%
-    mutate(Camera=pred$fit,
-           Pred.SE=pred$se.fit,
-           low=Camera-1.96*Pred.SE,
-           high=Camera+1.96*Pred.SE)
-  p=dd%>%
-    ggplot(aes(Observer,Camera,color=method))+
-    geom_point(size=2.5,alpha = 0.5)+
-    facet_wrap(~method,scales='free')+
-    geom_ribbon(data=Preds,aes(ymin = low, ymax = high,fill=method),alpha = 0.2)+
-    geom_line(data=Preds,aes(Observer,Camera))+
-    geom_line(aes(Observer,Observer),linetype=2,color='black')+
-    theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
-             leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = 'none',
-          legend.title = element_blank())+
-    xlab("Number of individuals reported by observer")+
-    ylab("Number of individuals recorded from camera")+
-    labs(subtitle=bquote(.(SBTL)~.("(")*D^2*.('=')*.(round(D2.mod,3))*.(")")))
-  
-  COEF=summary(mod)
-  COEF=as.data.frame(COEF$coefficients)[1:2,1:2]%>%
-    rename(SE="Std. Error")%>%
-    mutate(low=Estimate-1.96*SE,
-           high=Estimate+1.96*SE,
-           Coef=c("Intercept","Slope"))
-  
-  return(list(mod=mod,p=p,Over.dispesion=Over.dispesion,COEF=COEF))
-}
-lolipop=function(x)
-{
-  p=x%>%
-    ungroup()%>%
-    mutate(COMMON_NAME = fct_reorder(COMMON_NAME, N))%>%
-    ggplot()+
-    geom_linerange(aes(x = COMMON_NAME, ymin = 0, ymax =  Mean, colour = method), 
-                   position = position_dodge(width = 0),show.legend=F)+
-    geom_hline(yintercept = 0,linetype=2)+
-    geom_errorbar(aes(ymin = xmin,ymax = xmax,x=COMMON_NAME),width = .125,show.legend=F)+
-    geom_point(aes(x = COMMON_NAME, y = Mean, fill = method),pch=21,size=4,
-               position = position_dodge(width = 0))+
-    geom_text(aes(x = COMMON_NAME, y = Mean,label = paste("n= ",N,sep='')),
-              size=6,alpha=.8,hjust=0.5, vjust=-0.5)+
-    coord_flip()+
-    facet_wrap(~method)+
-    theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=20,
-             leg.siz=14,axs.t.siz=14,axs.T.siz=18)+
-    theme(legend.position = "none")+
-    ylab("Percentage diference")+xlab('')+ylim(-100,100)
-  return(p)
-}
-fn.compare.obs.cam=function(CAM, OBS, GROUP, Terms, Minobs.per)  
-{
-  Not=c('sheet_no',Terms)
-  d=rbind(CAM%>%
-            mutate(Code=as.numeric(Code))%>%
-            filter(!is.na(Code))%>%
-            filter(!is.na(COMMON_NAME))%>%
-            filter(sheet_no%in%unique(OBS$sheet_no))%>%
-            group_by(COMMON_NAME,method,sheet_no)%>%
-            summarise(n=sum(number))%>%
-            mutate(Platform="Camera"),
-          OBS%>%
-            filter(!is.na(COMMON_NAME))%>%
-            filter(!COMMON_NAME=="Unidentified")%>%
-            filter(!COMMON_NAME=="")%>%
-            group_by(COMMON_NAME,method,sheet_no)%>%
-            summarise(n=sum(number))%>%
-            mutate(Platform="Observer"))%>%
-    ungroup()
-  
-  d=d%>%
-    mutate(method=ifelse(method=="GN","Gillnet",
-                  ifelse(method=="LL","Longline",
-                  method)))
-
-  #extract non-match data for review
-  out.for.Jack=d%>%
-    dplyr::select(-method)%>%
-    spread(Platform,n,fill=0)%>%
-    mutate(Discrepancy=abs(Camera-Observer))%>%
-    filter(Discrepancy>0)
-  
-  #display discrepancies
-  Shts=d%>%
-    distinct(sheet_no)%>%
-    arrange(sheet_no)%>%
-    mutate(Shot=1:n(),
-           Shot=factor(Shot,levels=Shot))
-  
-  my.formula <- y ~ x
-  p.ind=d%>%
-    spread(Platform,n,fill=0)%>%
-    mutate(Discrepancy=abs(Observer-Camera))%>%
-    left_join(Shts,by="sheet_no")%>%
-    filter(!is.na(method))%>%
-    ungroup()%>%
-    ggplot(aes(x=Observer,y=Camera))+
-    geom_line(aes(Observer,Observer),size=1.5)+
-    geom_jitter(aes(color=COMMON_NAME), size=3)+
-    # geom_smooth(method = "lm",se=T,formula = my.formula)+
-    #  stat_poly_eq(formula = my.formula, 
-    #              aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
-    #             label.y = "top",label.x="left",parse = TRUE, size = 5) +
-    facet_wrap(~ method,ncol=2,scales = "free")+
-    xlab("Number of individuals reported by observer")+
-    ylab("Number of individuals recorded by camera")+
-    theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
-             leg.siz=11,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = "top",
-          legend.title = element_blank())+
-    xlim(0,NA) 
-  
-  p.sp=d%>%
-    mutate(n=1)%>%
-    spread(Platform,n,fill=0)%>%
-    mutate(Discrepancy=abs(Observer-Camera))%>%
-    left_join(Shts,by="sheet_no")%>%
-    filter(!is.na(method))%>%
-    group_by(Shot,method)%>%
-    summarise(Camera=sum(Camera),
-              Observer=sum(Observer))%>%
-    ggplot(aes(x=Observer,y=Camera))+
-    geom_line(aes(Observer,Observer),size=1.5)+
-    geom_jitter(aes(color=method), size=3,show.legend = F)+
-    facet_wrap(~ method,ncol=2,scales = "free_x")+
-    xlab("Number of species reported by observer")+
-    ylab("Number of species recorded by camera")+
-    theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
-             lgT.siz=18,leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = "top")+
-    xlim(0,NA)
-  
-  
-  #univariate stats (follow Emery et al 2019) 
-  do.cpue=FALSE
-  if(do.cpue)
+  fn.obs_cam.barplot=function(n.shots,Cam,Obs,LGN,TITL)
   {
+    LGN.LL=paste(' (',n.shots$LL,' shots)',sep='')
+    LGN.GN=paste(' (',n.shots$GN,' shots)',sep='')
+    N.other=length(This.sp.other)
+    d=rbind(Cam,Obs)%>%
+      mutate(Method.hour=ifelse(method=='Longline',paste(method,LGN.LL,sep=''),
+                                ifelse(method=='Gillnet',paste(method,LGN.GN,sep=''),
+                                       NA)))%>%
+      filter(!is.na(method))%>%
+      mutate(COMMON_NAME=ifelse(!COMMON_NAME%in%This.sp.other,COMMON_NAME,paste0("Other (n=",N.other,' species)')))
+    p=d%>%
+      ggplot(aes(x=COMMON_NAME, y=n, fill=Platform)) + 
+      geom_bar(position="dodge", stat="identity")+
+      coord_flip() +
+      facet_wrap(~Method.hour,dir='h',scales='free_x')+ 
+      theme_PA(Ttl.siz=20,str.siz=16,strx.siz=16,
+               leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
+      theme(legend.position = LGN,
+            legend.justification='center',
+            legend.direction='horizontal',
+            legend.title = element_blank())+
+      xlab('')+ylab('Number of individuals')+
+      scale_y_continuous(breaks = integer_breaks())+
+      guides(fill = guide_legend(nrow = 1))+
+      scale_x_discrete(position = "top")
+    
+    if(!is.null(TITL)) p=p+ggtitle(TITL)
+    
+    return(p)
+  }
+  
+  #Commercial species
+  This.sp=TAB.comm%>%pull(COMMON_NAME)
+  This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
+  id.Othersharks=match("Other sharks",This.sp)
+  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)
+  p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
+                          distinct(sheet_no,method)%>%
+                          group_by(method)%>%
+                          tally()%>%
+                          spread(method,n),
+                        Cam=EM.vs.OM.Video.camera1%>% 
+                          filter(COMMON_NAME%in%This.sp)%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Camera"),
+                        Obs=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera1$sheet_no) & 
+                                   COMMON_NAME%in%This.sp)%>%
+                          mutate(method=ifelse(method=="GN","Gillnet",
+                                               ifelse(method=="LL","Longline",
+                                                      NA)))%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Observer"),
+                        LGN="top",
+                        TITL="Commercial species")
+  
+  #Bycatch species    
+  This.sp=TAB.disc%>%pull(COMMON_NAME)
+  This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
+  id.Othersharks=match("Other sharks",This.sp)
+  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)
+  p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
+                          distinct(sheet_no,method)%>%
+                          group_by(method)%>%
+                          tally()%>%
+                          spread(method,n),
+                        Cam=EM.vs.OM.Video.camera1%>%
+                          filter(COMMON_NAME%in%This.sp)%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Camera"),
+                        Obs=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera1$sheet_no) & 
+                                   COMMON_NAME%in%This.sp)%>%
+                          mutate(method=ifelse(method=="GN","Gillnet",
+                                               ifelse(method=="LL","Longline",
+                                                      NA)))%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Observer"),
+                        LGN="top",
+                        TITL="Discarded species")
+  
+  fig=ggarrange(p1+rremove("xlab")+ylim(0,650), p2+rremove("xlab")+ylim(0,650),
+                ncol = 1, nrow = 2,
+                common.legend=TRUE)
+  annotate_figure(fig,bottom = text_grob("Number of individuals",size = 18))
+  ggsave(le.paste("Camera_v_Observer/Barplot.tiff"),width = 12,height = 12,compression = "lzw")
+  
+  
+  #3. Statistical comparison
+  little.fn=function(d,Method,group,Not)
+  {
+    n=d%>%
+      filter(method==Method)%>%
+      group_by(COMMON_NAME)%>%
+      summarise(Tot=sum(n))%>%
+      arrange(-Tot)%>%
+      mutate(Cumktch=cumsum(Tot)/sum(Tot))
+    if(group=='95')
+    {
+      what.species=n%>%mutate(species2=ifelse(Cumktch<=0.95,COMMON_NAME,'Other'))%>%pull(species2)
+    }
+    if(group=='Top20')
+    {
+      what.species=n%>%mutate(Row=1:n(),
+                              species2=ifelse(Row<=20,COMMON_NAME,'Other'))%>%pull(species2)
+    }
+    what.species=unique(what.species)
+    dd=d%>%
+      filter(method==Method)%>%
+      mutate(COMMON_NAME=ifelse(COMMON_NAME%in%what.species,COMMON_NAME,"Other"))%>%
+      group_by(COMMON_NAME,sheet_no,Platform)%>%
+      summarise(N=sum(n))%>%
+      spread(COMMON_NAME,N,fill=0)%>%
+      ungroup()
+    
+    dd$ColSum=rowSums(dd[-match(Not,names(dd))])
+    dd[-match(c(Not,'ColSum'),names(dd))]=dd[-match(c(Not,'ColSum'),names(dd))]/dd$ColSum
+    dd=dd%>%
+      dplyr::select(-ColSum)%>%
+      data.frame
+    return(dd)
+  }
+  D2=function(null,dev) (null-dev)/null
+  fn.mod=function(dd,SBTL)
+  {
+    #check_overdispersion(Pois.mod)
+    #Pois.mod <- glm(Camera ~ Observer * method, family=poisson(link = "identity"), data=d1) #identity link to assume linearity
+    #QuasiPois.mod <- glm(Camera ~ Observer * method, family=quasipoisson(link = "identity"), data=d1)
+    #NB.mod <- glm.nb(Camera ~ Observer * method, data=d1, link='identity')
+    
+    mod <- glm(Camera ~ Observer + method , family="gaussian", data=dd)
+    mod_species <- glm(Camera ~ Observer + method + COMMON_NAME, family="gaussian", data=dd)
+    Over.dispesion=check_overdispersion(mod)
+    D2.mod=D2(mod$null.deviance,mod$deviance)
+    
+    pred=predict(mod,type='response',se.fit=T)
+    Preds=data.frame(Observer=dd$Observer,
+                     method=dd$method)%>%
+      mutate(Camera=pred$fit,
+             Pred.SE=pred$se.fit,
+             low=Camera-1.96*Pred.SE,
+             high=Camera+1.96*Pred.SE)
+    p=dd%>%
+      ggplot(aes(Observer,Camera,color=method))+
+      geom_point(size=2.5,alpha = 0.5)+
+      facet_wrap(~method,scales='free')+
+      geom_ribbon(data=Preds,aes(ymin = low, ymax = high,fill=method),alpha = 0.2)+
+      geom_line(data=Preds,aes(Observer,Camera))+
+      geom_line(aes(Observer,Observer),linetype=2,color='black')+
+      theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
+               leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
+      theme(legend.position = 'none',
+            legend.title = element_blank())+
+      xlab("Number of individuals reported by observer")+
+      ylab("Number of individuals recorded from camera")+
+      labs(subtitle=bquote(.(SBTL)~.("(")*D^2*.('=')*.(round(D2.mod,3))*.(")")))
+    
+    COEF=summary(mod)
+    COEF=as.data.frame(COEF$coefficients)[1:2,1:2]%>%
+      rename(SE="Std. Error")%>%
+      mutate(low=Estimate-1.96*SE,
+             high=Estimate+1.96*SE,
+             Coef=c("Intercept","Slope"))
+    
+    return(list(mod=mod,mod_species=mod_species,p=p,Over.dispesion=Over.dispesion,COEF=COEF))
+  }
+  lolipop=function(x,disc.sp)
+  {
+    x=x%>%
+      ungroup()%>%
+      mutate(COMMON_NAME = fct_reorder(COMMON_NAME, N))
+    CLR=ifelse(levels(x$COMMON_NAME)%in%disc.sp,'firebrick4','darkgreen')
+    p=x%>%
+      ggplot()+
+      geom_linerange(aes(x = COMMON_NAME, ymin = 0, ymax =  Mean, colour = method), 
+                     position = position_dodge(width = 0),show.legend=F)+
+      geom_hline(yintercept = 0,linetype=2)+
+      geom_errorbar(aes(ymin = xmin,ymax = xmax,x=COMMON_NAME),width = .125,show.legend=F)+
+      geom_point(aes(x = COMMON_NAME, y = Mean, fill = method),pch=21,size=3,
+                 position = position_dodge(width = 0))+
+      geom_text(aes(x = COMMON_NAME, y = Mean,label = paste("n=",N,sep='')),
+                size=5,alpha=.8,hjust=-0.25, vjust=0)+
+      coord_flip()+
+      facet_wrap(~method)+
+      theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=20,
+               leg.siz=14,axs.t.siz=14,axs.T.siz=18)+
+      theme(legend.position = "none",
+            axis.text.y = element_text(hjust = 1, colour = CLR))+
+      ylab("Percentage diference")+xlab('')+ylim(-100,100)+
+      geom_text(y = 70, x =15 ,label = '% more in EM',
+                size=7,angle=90,hjust=-0.1, vjust=0,color=alpha('grey',0.35))+
+      geom_segment(x = 15, y = 50, xend = 15, yend = 85, color=alpha('grey',0.35),
+                   arrow = arrow(length = unit(0.25, "cm"), type = "closed"))+
+      geom_text(y = -70, x =15 ,label = '% more in OM',
+                size=7,angle=90,hjust=-0.1, vjust=0,color=alpha('grey',0.35))+
+      geom_segment(x = 15, y = -50, xend = 15, yend = -85, color=alpha('grey',0.35),
+                   arrow = arrow(length = unit(0.25, "cm"), type = "closed"))
+    
+    return(p)
+  }
+  fn.compare.obs.cam=function(CAM, OBS, GROUP, Terms, Minobs.per)  
+  {
+    Not=c('sheet_no',Terms)
+    d=rbind(CAM%>%
+              mutate(Code=as.numeric(Code))%>%
+              filter(!is.na(Code))%>%
+              filter(!is.na(COMMON_NAME))%>%
+              filter(sheet_no%in%unique(OBS$sheet_no))%>%
+              group_by(COMMON_NAME,method,sheet_no)%>%
+              summarise(n=sum(number))%>%
+              mutate(Platform="Camera"),
+            OBS%>%
+              filter(!is.na(COMMON_NAME))%>%
+              filter(!COMMON_NAME=="Unidentified")%>%
+              filter(!COMMON_NAME=="")%>%
+              group_by(COMMON_NAME,method,sheet_no)%>%
+              summarise(n=sum(number))%>%
+              mutate(Platform="Observer"))%>%
+      ungroup()
+    
     d=d%>%
-      mutate(cpue=n/Effort.infRD,
-             log.cpue=log(cpue))
-    d%>%
-      ggplot(aes(n, fill = Platform)) +
-      geom_histogram(binwidth=.5, position="dodge")
+      filter(!COMMON_NAME=="")%>%
+      mutate(method=ifelse(method=="GN","Gillnet",
+                    ifelse(method=="LL","Longline",
+                    method)),
+             n=ifelse(is.na(n),0,n))
     
-    d%>%
-      filter(method=="GN")%>%
-      ggplot(aes(log.cpue, color=Platform)) +geom_density()
+    #extract non-match data for review
+    out.for.Jack=d%>%
+      dplyr::select(-method)%>%
+      spread(Platform,n,fill=0)%>%
+      mutate(Discrepancy=abs(Camera-Observer))%>%
+      filter(Discrepancy>0)
     
-    d%>%
-      filter(method=="LL")%>%
-      ggplot(aes(log.cpue, color=Platform)) +geom_density()
+    #display discrepancies
+    Shts=d%>%
+      distinct(sheet_no)%>%
+      arrange(sheet_no)%>%
+      mutate(Shot=1:n(),
+             Shot=factor(Shot,levels=Shot))
     
-    mod.GN <- glm(log.cpue ~ Platform * COMMON_NAME, family="gaussian", data=d%>%filter(method=="GN"))
-    mod.LL <- glm(log.cpue ~ Platform * COMMON_NAME, family="gaussian", data=d%>%filter(method=="LL"))
+    my.formula <- y ~ x
+    p.ind=d%>%
+      spread(Platform,n,fill=0)%>%
+      mutate(Discrepancy=abs(Observer-Camera))%>%
+      left_join(Shts,by="sheet_no")%>%
+      filter(!is.na(method))%>%
+      ungroup()%>%
+      ggplot(aes(x=Observer,y=Camera))+
+      geom_line(aes(Observer,Observer),size=1.5)+
+      geom_jitter(aes(color=COMMON_NAME), size=3)+
+      # geom_smooth(method = "lm",se=T,formula = my.formula)+
+      #  stat_poly_eq(formula = my.formula, 
+      #              aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")),
+      #             label.y = "top",label.x="left",parse = TRUE, size = 5) +
+      facet_wrap(~ method,ncol=2,scales = "free")+
+      xlab("Number of individuals reported by observer")+
+      ylab("Number of individuals recorded by camera")+
+      theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
+               leg.siz=11,axs.t.siz=16,axs.T.siz=18)+
+      theme(legend.position = "top",
+            legend.title = element_blank())+
+      xlim(0,NA) 
+    
+    p.sp=d%>%
+      mutate(n=1)%>%
+      spread(Platform,n,fill=0)%>%
+      mutate(Discrepancy=abs(Observer-Camera))%>%
+      left_join(Shts,by="sheet_no")%>%
+      filter(!is.na(method))%>%
+      group_by(Shot,method)%>%
+      summarise(Camera=sum(Camera),
+                Observer=sum(Observer))%>%
+      ggplot(aes(x=Observer,y=Camera))+
+      geom_line(aes(Observer,Observer),size=1.5)+
+      geom_jitter(aes(color=method), size=3,show.legend = F)+
+      facet_wrap(~ method,ncol=2,scales = "free_x")+
+      xlab("Number of species reported by observer")+
+      ylab("Number of species recorded by camera")+
+      theme_PA(Ttl.siz=18,Sbt.siz=17,str.siz=16,strx.siz=16,
+               lgT.siz=18,leg.siz=18,axs.t.siz=16,axs.T.siz=18)+
+      theme(legend.position = "top")+
+      xlim(0,NA)
+    
+    
+    #univariate stats (follow Emery et al 2019) 
+    do.cpue=FALSE
+    if(do.cpue)
+    {
+      d=d%>%
+        mutate(cpue=n/Effort.infRD,
+               log.cpue=log(cpue))
+      d%>%
+        ggplot(aes(n, fill = Platform)) +
+        geom_histogram(binwidth=.5, position="dodge")
+      
+      d%>%
+        filter(method=="GN")%>%
+        ggplot(aes(log.cpue, color=Platform)) +geom_density()
+      
+      d%>%
+        filter(method=="LL")%>%
+        ggplot(aes(log.cpue, color=Platform)) +geom_density()
+      
+      mod.GN <- glm(log.cpue ~ Platform * COMMON_NAME, family="gaussian", data=d%>%filter(method=="GN"))
+      mod.LL <- glm(log.cpue ~ Platform * COMMON_NAME, family="gaussian", data=d%>%filter(method=="LL"))
+    }
+    zero.ktch.sht=d%>%
+      group_by(sheet_no)%>%
+      summarise(N=sum(n))%>%
+      filter(N==0)%>%
+      pull(sheet_no)
+    d1=d
+    if(length(zero.ktch.sht)>0) d1=d1%>%filter(!sheet_no%in%zero.ktch.sht)
+    d1=d1%>%
+      spread(Platform,n,fill=0)%>%
+      filter(!is.na(method))%>%
+      mutate(method=factor(method))
+    
+    #Fit glm
+    Discarded.species=TAB.disc%>%pull(COMMON_NAME)
+    
+    mod_all.species=fn.mod(dd=d1,SBTL="All species")
+    mod_commercial.species=fn.mod(dd=d1%>%
+                                    filter(!COMMON_NAME%in%Discarded.species),
+                                  SBTL="Commercial species")  
+    mod_discarded.species=fn.mod(dd=d1%>%
+                                   filter(COMMON_NAME%in%Discarded.species),
+                                 SBTL="Discarded species")
+    
+    #Percentage difference by species
+    Per.diff=d1%>%
+      rowwise()%>%
+      mutate(Max=max(c_across(Camera:Observer)))%>%
+      mutate(Per.diff=100*(Camera-Observer)/Max)%>%
+      group_by(COMMON_NAME,method)%>%
+      summarise(Mean=mean(Per.diff),
+                SD=sd(Per.diff),
+                N=n())%>%
+      mutate(SE=SD/sqrt(SD),
+             xmin=ifelse(!is.na(SE),Mean-SE,0),
+             xmax=ifelse(!is.na(SE),Mean+SE,0))%>%
+      ungroup()%>%
+      filter(N>=Minobs.per)
+    Per.dif=lolipop(x=Per.diff,disc.sp=Discarded.species)
+    Per.dif.com=lolipop(x=Per.diff%>%filter(!COMMON_NAME%in%Discarded.species),
+                        disc.sp=Discarded.species)
+    Per.dif.dis=lolipop(x=Per.diff%>%filter(COMMON_NAME%in%Discarded.species),
+                        disc.sp=Discarded.species)
+    
+    
+    
+    #multivariate
+    #1. GN
+    dd=little.fn(d=d,Method="Gillnet",group=GROUP,Not=Not)   
+    Community <- dd[-match(Not,names(dd))]  
+    
+    #MDS
+    MDS <- metaMDS(comm = Community, distance = "bray",k=2,trymax=100, trace = FALSE, autotransform = FALSE)
+    MDS_xy <-data.frame(MDS$points)%>%
+      mutate(dummy =dd[,match(Terms,names(dd))],
+             name=dd[,match('sheet_no',names(dd))])
+    p.GN=MDS_xy%>%
+      ggplot(aes(MDS1, MDS2, color = dummy,label =name)) +
+      geom_point(size=3) + geom_text_repel(show.legend = F)+
+      theme_bw() +
+      annotate(geom="text", x=0.85*max(MDS_xy$MDS1), y=min(MDS_xy$MDS2), 
+               label=paste("Stress=",round(MDS$stress,3)))+
+      theme_PA(Ttl.siz=18,leg.siz=14,axs.t.siz=10,axs.T.siz=14)+
+      theme(legend.position = "top",
+            legend.justification='right',
+            legend.title = element_blank())+
+      guides(colour = guide_legend(nrow = 1))+
+      ggtitle("Gillnet")+xlab('')+ylab('')
+    
+    #Permanova
+    adon.results<-adonis(formula(paste('Community',Terms,sep='~')),data=dd, method="bray",perm=5e3)
+    adon.GN=as.data.frame(adon.results$aov.tab)
+    
+    
+    #2. LL
+    dd=little.fn(d=d,Method="Longline",group=GROUP,Not=Not)   
+    Community <- dd[-match(Not,names(dd))]
+    
+    #MDS
+    MDS <- metaMDS(comm = Community, distance = "bray",k=2,trymax=100, trace = FALSE, autotransform = FALSE)
+    MDS_xy <-data.frame(MDS$points)%>%
+      mutate(dummy = dd[,match(Terms,names(dd))],
+             name=dd[,match('sheet_no',names(dd))])
+    p.LL=MDS_xy%>%
+      ggplot(aes(MDS1, MDS2, color = dummy,label =name)) +
+      geom_point(size=3) + geom_text_repel(show.legend = F)+
+      theme_bw() +
+      annotate(geom="text", x=0.85*max(MDS_xy$MDS1), y=min(MDS_xy$MDS2), 
+               label=paste("Stress=",round(MDS$stress,3)))+
+      theme_PA(Ttl.siz=18,leg.siz=12,axs.t.siz=10,axs.T.siz=14)+
+      theme(legend.position = "none",
+            legend.title = element_blank())+
+      guides(colour = guide_legend(nrow = 1))+
+      ggtitle("Longline")+xlab('')+ylab('')
+    
+    #Permanova
+    adon.results<-adonis(formula(paste('Community',Terms,sep='~')),data=dd, method="bray",perm=5e3)
+    adon.LL=as.data.frame(adon.results$aov.tab)
+    
+    
+    return(list(out.for.Jack=out.for.Jack,
+                p.ind=p.ind,p.sp=p.sp,
+                mod_all.species=mod_all.species,
+                mod_commercial.species=mod_commercial.species,
+                mod_discarded.species=mod_discarded.species,
+                Per.diff.table=Per.diff,
+                Per.dif=Per.dif,
+                Per.dif.com=Per.dif.com,
+                Per.dif.dis=Per.dif.dis,
+                p.GN=p.GN,p.LL=p.LL,
+                adon.GN=adon.GN,adon.LL=adon.LL))
   }
-  zero.ktch.sht=d%>%
-    group_by(sheet_no)%>%
-    summarise(N=sum(n))%>%
-    filter(N==0)%>%
-    pull(sheet_no)
-  d1=d
-  if(length(zero.ktch.sht)>0) d1=d1%>%filter(!sheet_no%in%zero.ktch.sht)
-  d1=d1%>%
-    spread(Platform,n,fill=0)%>%
-    filter(!is.na(method))%>%
-    mutate(method=factor(method))
   
-  #Fit glm
-  Discarded.species=TAB.disc%>%pull(COMMON_NAME)
-  
-  mod_all.species=fn.mod(dd=d1,SBTL="All species")
-  mod_commercial.species=fn.mod(dd=d1%>%
-                                  filter(!COMMON_NAME%in%Discarded.species),
-                                SBTL="Commercial species")  
-  mod_discarded.species=fn.mod(dd=d1%>%
-                                 filter(COMMON_NAME%in%Discarded.species),
-                               SBTL="Discarded species")
-  
-  #Percentage difference by species
-  Per.diff=d1%>%
-    rowwise()%>%
-    mutate(Max=max(c_across(Camera:Observer)))%>%
-    mutate(Per.diff=100*(Camera-Observer)/Max)%>%
-    group_by(COMMON_NAME,method)%>%
-    summarise(Mean=mean(Per.diff),
-              SD=sd(Per.diff),
-              N=n())%>%
-    mutate(SE=SD/sqrt(SD),
-           xmin=ifelse(!is.na(SE),Mean-SE,0),
-           xmax=ifelse(!is.na(SE),Mean+SE,0))%>%
-    ungroup()%>%
-    filter(N>=Minobs.per)
-  Per.dif=lolipop(x=Per.diff)
-  Per.dif.com=lolipop(x=Per.diff%>%filter(!COMMON_NAME%in%Discarded.species))
-  Per.dif.dis=lolipop(x=Per.diff%>%filter(COMMON_NAME%in%Discarded.species))
-  
-  
-  
-  #multivariate
-  #1. GN
-  dd=little.fn(d=d,Method="Gillnet",group=GROUP,Not=Not)   
-  Community <- dd[-match(Not,names(dd))]  
-  
-  #MDS
-  MDS <- metaMDS(comm = Community, distance = "bray",k=2,trymax=100, trace = FALSE, autotransform = FALSE)
-  MDS_xy <-data.frame(MDS$points)%>%
-    mutate(dummy =dd[,match(Terms,names(dd))],
-           name=dd[,match('sheet_no',names(dd))])
-  p.GN=MDS_xy%>%
-    ggplot(aes(MDS1, MDS2, color = dummy,label =name)) +
-    geom_point(size=3) + geom_text_repel(show.legend = F)+
-    theme_bw() +
-    annotate(geom="text", x=0.85*max(MDS_xy$MDS1), y=min(MDS_xy$MDS2), 
-             label=paste("Stress=",round(MDS$stress,3)))+
-    theme_PA(Ttl.siz=18,leg.siz=14,axs.t.siz=10,axs.T.siz=14)+
-    theme(legend.position = "top",
-          legend.justification='right',
-          legend.title = element_blank())+
-    guides(colour = guide_legend(nrow = 1))+
-    ggtitle("Gillnet")+xlab('')+ylab('')
-  
-  #Permanova
-  adon.results<-adonis(formula(paste('Community',Terms,sep='~')),data=dd, method="bray",perm=5e3)
-  adon.GN=as.data.frame(adon.results$aov.tab)
-  
-  
-  #2. LL
-  dd=little.fn(d=d,Method="Longline",group=GROUP,Not=Not)   
-  Community <- dd[-match(Not,names(dd))]
-  
-  #MDS
-  MDS <- metaMDS(comm = Community, distance = "bray",k=2,trymax=100, trace = FALSE, autotransform = FALSE)
-  MDS_xy <-data.frame(MDS$points)%>%
-    mutate(dummy = dd[,match(Terms,names(dd))],
-           name=dd[,match('sheet_no',names(dd))])
-  p.LL=MDS_xy%>%
-    ggplot(aes(MDS1, MDS2, color = dummy,label =name)) +
-    geom_point(size=3) + geom_text_repel(show.legend = F)+
-    theme_bw() +
-    annotate(geom="text", x=0.85*max(MDS_xy$MDS1), y=min(MDS_xy$MDS2), 
-             label=paste("Stress=",round(MDS$stress,3)))+
-    theme_PA(Ttl.siz=18,leg.siz=12,axs.t.siz=10,axs.T.siz=14)+
-    theme(legend.position = "none",
-          legend.title = element_blank())+
-    guides(colour = guide_legend(nrow = 1))+
-    ggtitle("Longline")+xlab('')+ylab('')
-  
-  #Permanova
-  adon.results<-adonis(formula(paste('Community',Terms,sep='~')),data=dd, method="bray",perm=5e3)
-  adon.LL=as.data.frame(adon.results$aov.tab)
-  
-  
-  return(list(out.for.Jack=out.for.Jack,
-              p.ind=p.ind,p.sp=p.sp,
-              mod_all.species=mod_all.species,
-              mod_commercial.species=mod_commercial.species,
-              mod_discarded.species=mod_discarded.species,
-              Per.dif=Per.dif,
-              Per.dif.com=Per.dif.com,
-              Per.dif.dis=Per.dif.dis,
-              p.GN=p.GN,p.LL=p.LL,
-              adon.GN=adon.GN,adon.LL=adon.LL))
-}
-#ACA
-Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera1, 
-                       OBS=EM.vs.OM.DATA%>%
-                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera1$sheet_no)),   
-                       GROUP='Top20',
-                       Terms='Platform',
-                       Minobs.per=Minobs.per)
+  Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera1, 
+                         OBS=EM.vs.OM.DATA%>%
+                           filter(sheet_no%in%unique(EM.vs.OM.Video.camera1$sheet_no)),   
+                         GROUP='Top20',
+                         Terms='Platform',
+                         Minobs.per=Minobs.per)
   #export data issues
-write.csv(Out$out.for.Jack,le.paste("Camera_v_Observer/out.for.Jack.csv"),row.names=F)
-
-#export Raw data comparison
-Out$p.ind
-ggsave(le.paste("Camera_v_Observer/raw.tiff"),width = 12,height = 10,compression = "lzw")
-
-Out$p.sp
-ggsave(le.paste("Camera_v_Observer/raw_species.tiff"),width = 12,height = 10,compression = "lzw")
-
-
+  write.csv(Out$out.for.Jack,le.paste("Camera_v_Observer/out.for.Jack.csv"),row.names=F)
+  
+  #export Raw data comparison
+  Out$p.ind
+  ggsave(le.paste("Camera_v_Observer/raw.tiff"),width = 12,height = 10,compression = "lzw")
+  
+  Out$p.sp
+  ggsave(le.paste("Camera_v_Observer/raw_species.tiff"),width = 12,height = 10,compression = "lzw")
+  
+  
   #export GLMS
-ft <- as_flextable(Out$mod_all.species$mod)
-save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species.png"))
-ft <- as_flextable(Out$mod_commercial.species$mod)
-save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_commercial.species.png"))
-ft <- as_flextable(Out$mod_discarded.species$mod)
-save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_discarded.species.png"))
-
-fig=ggarrange(Out$mod_all.species$p+rremove("xlab")+rremove("ylab"),
-              Out$mod_commercial.species$p+rremove("xlab")+rremove("ylab"),
-              Out$mod_discarded.species$p+rremove("xlab")+rremove("ylab"),
-              ncol = 1, nrow = 3,
-              common.legend=TRUE)
-annotate_figure(fig,
-                bottom = text_grob("Number of individuals reported by observer",size = 18),
-                left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
-ggsave(le.paste("Camera_v_Observer/GLM_preds.tiff"),width = 8,height = 12,compression = "lzw")
-
-
+  ft <- as_flextable(Out$mod_all.species$mod)
+  save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species.docx"))
+  save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species.png"))
+  
+  ft <- as_flextable(Out$mod_commercial.species$mod)
+  save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_commercial.species.docx"))
+  save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_commercial.species.png"))
+  
+  ft <- as_flextable(Out$mod_discarded.species$mod)
+  save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_discarded.species.docx"))
+  save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_discarded.species.png"))
+  
+  fig=ggarrange(Out$mod_all.species$p+rremove("xlab")+rremove("ylab"),
+                Out$mod_commercial.species$p+rremove("xlab")+rremove("ylab"),
+                Out$mod_discarded.species$p+rremove("xlab")+rremove("ylab"),
+                ncol = 1, nrow = 3,
+                common.legend=TRUE)
+  annotate_figure(fig,
+                  bottom = text_grob("Number of individuals reported by observer",size = 18),
+                  left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
+  ggsave(le.paste("Camera_v_Observer/GLM_preds_by.data.set.tiff"),width = 8,height = 12,compression = "lzw")
+  
+  Out$mod_all.species$p
+  ggsave(le.paste("Camera_v_Observer/GLM_preds.tiff"),width = 6,height = 6,compression = "lzw")
+  
   #export Percentage difference
-Out$Per.dif
-ggsave(le.paste("Camera_v_Observer/Percentage.difference.tiff"),width = 10,height = 12,compression = "lzw")
-
-Out$Per.dif.com
-ggsave(le.paste("Camera_v_Observer/Percentage.difference_com.tiff"),width = 10,height = 12,compression = "lzw")
-
-Out$Per.dif.dis
-ggsave(le.paste("Camera_v_Observer/Percentage.difference_disc.tiff"),width = 10,height = 12,compression = "lzw")
-
-
+  write.csv(Out$Per.diff.table%>%arrange(COMMON_NAME),
+            le.paste("Camera_v_Observer/Percentage.difference.csv"),row.names = F)
+  Out$Per.dif
+  ggsave(le.paste("Camera_v_Observer/Percentage.difference.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  Out$Per.dif.com
+  ggsave(le.paste("Camera_v_Observer/Percentage.difference_com.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  Out$Per.dif.dis
+  ggsave(le.paste("Camera_v_Observer/Percentage.difference_disc.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  
   #export MDS
-fig=ggarrange(Out$p.GN, Out$p.LL,
-              ncol = 1, nrow = 2,
-              common.legend=TRUE)
-ggsave(le.paste("Camera_v_Observer/MDS.tiff"),width = 8,height = 12,compression = "lzw")
-
-
+  fig=ggarrange(Out$p.GN, Out$p.LL,
+                ncol = 1, nrow = 2,
+                common.legend=TRUE)
+  ggsave(le.paste("Camera_v_Observer/MDS.tiff"),width = 8,height = 12,compression = "lzw")
+  
+  
   #export Permanovas
-write.csv(Out$adon.GN,le.paste("Camera_v_Observer/Permanova_GN.csv"),row.names = T)
-write.csv(Out$adon.LL,le.paste("Camera_v_Observer/Permanova_LL.csv"),row.names = T)
-
+  write.csv(Out$adon.GN,le.paste("Camera_v_Observer/Permanova_GN.csv"),row.names = T)
+  write.csv(Out$adon.LL,le.paste("Camera_v_Observer/Permanova_LL.csv"),row.names = T)
+  
+}
+   
 
 #---------Analysis of Deck 2 camera VS observers --------------------------------------------------------------------
-
-# Deck 2  (over roller)                      
-if(approach.camera.observer.comps=='Original')
+if(do.camera.VS.observer)
 {
-  Video.camera2=Video.camera2.deck%>%
-    mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
-    dplyr::select(DPIRD.code,Code,Period)%>%
-    mutate(number=1)%>%
-    data.frame%>%
-    mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                              Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                              Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                              Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                              Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
-                              Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
-                              Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
-                              Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
-                              Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
-                              Code == 10000910 ~"Sponges"),
-           Period=tolower(Period),
-           Period=ifelse(Period=='gn','gillnet',
-                         ifelse(Period=='ll','longline',Period)),
-           sheet_no=case_when(Period=='gillnet'~str_remove(word(DPIRD.code,1,sep = "\\/"),'GN'),
-                              Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')))%>%
-    left_join(DATA_PA,by='sheet_no')%>%
-    mutate(Data.set="camera",
-           Period=ifelse(Period=='gillnet' & method=='LL','longline',
-                         ifelse(Period=='longline' & method=='GN','gillnet',Period)))
+  # Deck 2  (over roller)                      
+  if(approach.camera.observer.comps=='Original')
+  {
+    Video.camera2=Video.camera2.deck%>%
+      mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
+      dplyr::select(DPIRD.code,Code,Period)%>%
+      mutate(number=1)%>%
+      data.frame%>%
+      mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
+                                Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
+                                Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
+                                Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
+                                Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
+                                Code == 10000910 ~"Sponges"),
+             Period=tolower(Period),
+             Period=ifelse(Period=='gn','gillnet',
+                           ifelse(Period=='ll','longline',Period)),
+             sheet_no=case_when(Period=='gillnet'~str_remove(word(DPIRD.code,1,sep = "\\/"),'GN'),
+                                Period=='longline'~str_remove(word(DPIRD.code,2,sep = "\\/"),'LL')))%>%
+      left_join(DATA_PA,by='sheet_no')%>%
+      mutate(Data.set="camera",
+             Period=ifelse(Period=='gillnet' & method=='LL','longline',
+                           ifelse(Period=='longline' & method=='GN','gillnet',Period)))
+    
+  }
+  if(approach.camera.observer.comps=='Sarah')
+  {
+    Video.camera2=Video.camera2.deck%>%
+      mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
+      dplyr::select(DPIRD.code,Code,Period)%>%
+      mutate(number=1)%>%
+      data.frame%>%
+      separate(DPIRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
+      mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
+                                Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
+                                Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
+                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
+                                Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
+                                Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
+                                Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
+                                Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
+                                Code == 10000910 ~"Sponges"),
+             Period=tolower(Period),
+             Period=ifelse(Period=='gn','gillnet',
+                           ifelse(Period=='ll','longline',Period)),
+             sheet_no=ifelse(Period=='gillnet',  as.character(GN),as.character(LL)))%>%
+      left_join(DATA_PA,by='sheet_no')%>%
+      mutate(Data.set="camera") %>%
+      filter(sheet_no %in% D2.good.ones$sheet_no) %>% 
+      mutate(sheet_no = substr(sheet_no, 3,8),
+             method=ifelse(is.na(method),capitalize(Period),method))
+  }
   
+  EM.vs.OM.Video.camera2=Video.camera2%>%
+    filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
+    mutate(Code=as.numeric(Code))%>%
+    left_join(All.species.names%>%
+                dplyr::select(COMMON_NAME,Code)%>%
+                distinct(Code,.keep_all=T),
+              by="Code")%>%
+    mutate(method=ifelse(method=="GN","Gillnet",
+                         ifelse(method=="LL","Longline",
+                                method)))%>%
+    mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
+                                 grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
+                                 grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
+                                 grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
+                                 grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
+                                 grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
+                                 grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
+                                 grepl('boxfish',tolower(COMMON_NAME))~'Boxfishes',    
+                                 grepl('parrotfish',tolower(COMMON_NAME))~'Parrotfishes',   
+                                 grepl('boarfish',tolower(COMMON_NAME))~'Boarfishes',   
+                                 grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
+                                 grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
+                                 grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
+                                 grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
+                                 TRUE~COMMON_NAME))
+  
+  
+  #1 Barplot of observer VS camera
+  TAB=EM.vs.OM.DATA%>%
+    filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
+    group_by(retainedflag,COMMON_NAME)%>%
+    tally()%>%
+    ungroup()
+  TAB.comm=TAB%>%
+    filter(retainedflag=='Yes')%>%
+    arrange(-n)%>%
+    mutate(Cum=cumsum(n),
+           Percent=100*Cum/sum(n))
+  TAB.disc=TAB%>%
+    filter(retainedflag=='No' & !COMMON_NAME%in%TAB.comm$COMMON_NAME)%>%
+    arrange(-n)%>%
+    mutate(Cum=cumsum(n),
+           Percent=100*Cum/sum(n))
+  
+  
+  #Commercial species
+  This.sp=TAB.comm%>%pull(COMMON_NAME)
+  This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
+  id.Othersharks=match("Other sharks",This.sp)
+  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)
+  p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
+                          distinct(sheet_no,method)%>%
+                          group_by(method)%>%
+                          tally()%>%
+                          spread(method,n),
+                        Cam=EM.vs.OM.Video.camera2%>%
+                          filter(COMMON_NAME%in%This.sp)%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Camera"),
+                        Obs=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera2$sheet_no) & 
+                                   COMMON_NAME%in%This.sp)%>%
+                          mutate(method=ifelse(method=="GN","Gillnet",
+                                               ifelse(method=="LL","Longline",
+                                                      NA)))%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Observer"),
+                        LGN="top",
+                        TITL="Commercial species")
+  
+  #Bycatch species
+  This.sp=TAB.disc%>%pull(COMMON_NAME)
+  This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
+  id.Othersharks=match("Other sharks",This.sp)
+  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)
+  p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
+                          distinct(sheet_no,method)%>%
+                          group_by(method)%>%
+                          tally()%>%
+                          spread(method,n),
+                        Cam=EM.vs.OM.Video.camera2%>%
+                          filter(COMMON_NAME%in%This.sp)%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Camera"),
+                        Obs=EM.vs.OM.DATA%>%
+                          filter(sheet_no%in%unique(Video.camera2$sheet_no) & 
+                                   COMMON_NAME%in%This.sp)%>%
+                          mutate(method=ifelse(method=="GN","Gillnet",
+                                               ifelse(method=="LL","Longline",
+                                                      NA)))%>%
+                          group_by(COMMON_NAME,method)%>%
+                          summarise(n=sum(number))%>%
+                          mutate(Platform="Observer"),
+                        LGN="top",
+                        TITL="Discarded species")
+  
+  fig=ggarrange(p1+rremove("xlab")+ylim(0,650), p2+rremove("xlab")+ylim(0,650),
+                ncol = 1, nrow = 2,
+                common.legend=TRUE)
+  annotate_figure(fig,bottom = text_grob("Number of individuals",size = 18))
+  ggsave(le.paste("Camera2_v_Observer/Barplot.tiff"),width = 12,height = 12,compression = "lzw")
+  
+  
+  #2. Statistical comparison  
+  Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera2,
+                         OBS=EM.vs.OM.DATA%>%
+                           filter(sheet_no%in%unique(EM.vs.OM.Video.camera2$sheet_no)),   
+                         GROUP='Top20',
+                         Terms='Platform',
+                         Minobs.per=Minobs.per)
+  #export data issues
+  write.csv(Out$out.for.Jack,le.paste("Camera2_v_Observer/out.for.Jack.csv"),row.names=F)
+  
+  #export Raw data comparison
+  Out$p.ind
+  ggsave(le.paste("Camera2_v_Observer/raw.tiff"),width = 12,height = 10,compression = "lzw")
+  
+  Out$p.sp
+  ggsave(le.paste("Camera2_v_Observer/raw_species.tiff"),width = 12,height = 10,compression = "lzw")
+  
+  
+  #export GLMS
+  ft <- as_flextable(Out$mod_all.species$mod)
+  save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species.docx"))
+  save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species.png"))
+  
+  ft <- as_flextable(Out$mod_commercial.species$mod)
+  save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_commercial.species.docx"))
+  save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_commercial.species.png"))
+  
+  ft <- as_flextable(Out$mod_discarded.species$mod)
+  save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_discarded.species.docx"))
+  save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_discarded.species.png"))
+  
+  fig=ggarrange(Out$mod_all.species$p+rremove("xlab")+rremove("ylab"),
+                Out$mod_commercial.species$p+rremove("xlab")+rremove("ylab"),
+                Out$mod_discarded.species$p+rremove("xlab")+rremove("ylab"),
+                ncol = 1, nrow = 3,
+                common.legend=TRUE)
+  annotate_figure(fig,
+                  bottom = text_grob("Number of individuals reported by observer",size = 18),
+                  left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
+  ggsave(le.paste("Camera2_v_Observer/GLM_preds_by.data.set.tiff"),width = 8,height = 12,compression = "lzw")
+  
+  Out$mod_all.species$p
+  ggsave(le.paste("Camera2_v_Observer/GLM_preds.tiff"),width = 6,height = 6,compression = "lzw")
+  
+  
+  #export Percentage difference
+  write.csv(Out$Per.diff.table%>%arrange(COMMON_NAME),
+            le.paste("Camera2_v_Observer/Percentage.difference.csv"),row.names = F)
+  Out$Per.dif
+  ggsave(le.paste("Camera2_v_Observer/Percentage.difference.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  #Out$Per.dif.com
+  #ggsave(le.paste("Camera2_v_Observer/Percentage.difference_com.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  # Out$Per.dif.dis
+  # ggsave(le.paste("Camera2_v_Observer/Percentage.difference_disc.tiff"),width = 10,height = 12,compression = "lzw")
+  
+  
+  #export MDS
+  fig=ggarrange(Out$p.GN, Out$p.LL,
+                ncol = 1, nrow = 2,
+                common.legend=TRUE)
+  ggsave(le.paste("Camera2_v_Observer/MDS.tiff"),width = 8,height = 12,compression = "lzw")
+  
+  
+  #export Permanovas
+  write.csv(Out$adon.GN,le.paste("Camera2_v_Observer/Permanova_GN.csv"),row.names = T)
+  write.csv(Out$adon.LL,le.paste("Camera2_v_Observer/Permanova_LL.csv"),row.names = T)
+  
+  
+  #Table of species
+  Discarded.species=TAB.disc%>%pull(COMMON_NAME)
+  Table.species=rbind(EM.vs.OM.Video.camera1%>%
+                        mutate(Platform='Camera1')%>%
+                        dplyr::select(method,COMMON_NAME,sheet_no,Platform),
+                      EM.vs.OM.Video.camera2%>%
+                        mutate(Platform='Camera2')%>%
+                        dplyr::select(method,COMMON_NAME,sheet_no,Platform),
+                      EM.vs.OM.DATA%>%
+                        mutate(Platform='Observer')%>%
+                        dplyr::select(method,COMMON_NAME,sheet_no,Platform))%>%
+    filter(!COMMON_NAME=='')
+  
+  Tab.shots=data.frame(Number.of.shots=length(unique(EM.vs.OM.DATA$sheet_no)),
+                       Number.of.individuals=nrow(Table.species))
+  
+  Table.species=Table.species%>%
+    distinct(COMMON_NAME)%>%
+    left_join(All.species.names%>%
+                dplyr::select(COMMON_NAME,SCIENTIFIC_NAME,Taxa)%>%
+                mutate(COMMON_NAME=case_when(COMMON_NAME%in%c('Gummy shark','Whiskery shark')~"Gummy/Whiskery sharks",
+                                           COMMON_NAME%in%c('Dusky shark','Bronze whaler')~"Whalers",
+                                           TRUE~COMMON_NAME),
+                     SCIENTIFIC_NAME=case_when(SCIENTIFIC_NAME%in%c('Mustelus antarcticus','Furgaleus macki')~"Mustelus antarcticus/Furgaleus macki",
+                                               SCIENTIFIC_NAME%in%c('Carcharhinus obscurus','Carcharhinus brachyurus')~"Carcharhinus obscurus/C. brachyurus",
+                                               TRUE~SCIENTIFIC_NAME))%>%
+                distinct(COMMON_NAME,.keep_all = T),
+              by='COMMON_NAME')%>%
+              arrange(Taxa,COMMON_NAME)
+  write.csv(Table.species,le.paste("Camera_v_Observer/Table.species.csv"),row.names = F)
+  write.csv(Tab.shots,le.paste("Camera_v_Observer/Tab.shots.csv"),row.names = F)
+  
+
 }
-if(approach.camera.observer.comps=='Sarah')
-{
-  Video.camera2=Video.camera2.deck%>%
-    mutate(Code=ifelse(Genus=="Kyphosus" & Species=="spp",'37361903',Code))%>%
-    dplyr::select(DPIRD.code,Code,Period)%>%
-    mutate(number=1)%>%
-    data.frame%>%
-    separate(DPIRD.code, into = c("GN", "LL"), sep = "/", remove = FALSE) %>% 
-    mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
-                              Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
-                              Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                              Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                              Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
-                              Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
-                              Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
-                              Code >=1.1e7 & Code<1.2e7 ~"Rock/reef structure",
-                              Code >=5.4e7 & Code<5.49e7 ~"Macroalgae",
-                              Code == 10000910 ~"Sponges"),
-           Period=tolower(Period),
-           Period=ifelse(Period=='gn','gillnet',
-                         ifelse(Period=='ll','longline',Period)),
-           sheet_no=ifelse(Period=='gillnet',  as.character(GN),as.character(LL)))%>%
-    left_join(DATA_PA,by='sheet_no')%>%
-    mutate(Data.set="camera") %>%
-    filter(sheet_no %in% D2.good.ones$sheet_no) %>% 
-    mutate(sheet_no = substr(sheet_no, 3,8),
-           method=ifelse(is.na(method),capitalize(Period),method))
-}
-
-EM.vs.OM.Video.camera2=Video.camera2%>%
-  filter(SP.group%in%c('Rays','Scalefish','Sharks'))%>%
-  mutate(Code=as.numeric(Code))%>%
-  left_join(All.species.names%>%
-              dplyr::select(COMMON_NAME,Code)%>%
-              distinct(Code,.keep_all=T),
-            by="Code")%>%
-  mutate(method=ifelse(method=="GN","Gillnet",
-                ifelse(method=="LL","Longline",
-                       method)))%>%
-  mutate(COMMON_NAME=case_when(grepl(paste(c("whaler","dusky shark"),collapse = '|'),tolower(COMMON_NAME))~'Whalers',
-                               grepl(paste(c("blacktip sharks","Common blacktip"),collapse = '|'),tolower(COMMON_NAME))~'Blacktip sharks',
-                               grepl('wobbegong',tolower(COMMON_NAME))~'Wobbegongs',
-                               grepl('hammerhead',tolower(COMMON_NAME))~'Hammerheads',
-                               grepl('stingray',tolower(COMMON_NAME))~'Stingrays',
-                               grepl('angel',tolower(COMMON_NAME))~'Angel sharks',
-                               grepl('catshark',tolower(COMMON_NAME))~'Catsharks',
-                               grepl('gurnard',tolower(COMMON_NAME))~'Gurnards',
-                               grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
-                               grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
-                               grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
-                               TRUE~COMMON_NAME))
-
-
-#1 Barplot of observer VS camera
-TAB=EM.vs.OM.DATA%>%
-  filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
-  group_by(retainedflag,COMMON_NAME)%>%
-  tally()%>%
-  ungroup()
-TAB.comm=TAB%>%
-  filter(retainedflag=='Yes')%>%
-  arrange(-n)%>%
-  mutate(Cum=cumsum(n),
-         Percent=100*Cum/sum(n))
-TAB.disc=TAB%>%
-  filter(retainedflag=='No' & !COMMON_NAME%in%TAB.comm$COMMON_NAME)%>%
-  arrange(-n)%>%
-  mutate(Cum=cumsum(n),
-         Percent=100*Cum/sum(n))
-
-
-#Commercial species
-This.sp=TAB.comm%>%pull(COMMON_NAME)
-This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
-p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
-                        distinct(sheet_no,method)%>%
-                        group_by(method)%>%
-                        tally()%>%
-                        spread(method,n),
-                      Cam=EM.vs.OM.Video.camera2%>%
-                        filter(COMMON_NAME%in%This.sp)%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Camera"),
-                      Obs=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera2$sheet_no) & 
-                                 COMMON_NAME%in%This.sp)%>%
-                        mutate(method=ifelse(method=="GN","Gillnet",
-                                             ifelse(method=="LL","Longline",
-                                                    NA)))%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Observer"),
-                      LGN="top",
-                      TITL="Commercial species")
-
-#Bycatch species
-This.sp=TAB.disc%>%pull(COMMON_NAME)
-This.sp.other=TAB.disc%>%filter(Percent>=95)%>%pull(COMMON_NAME)
-p2=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera2$sheet_no))%>%
-                        distinct(sheet_no,method)%>%
-                        group_by(method)%>%
-                        tally()%>%
-                        spread(method,n),
-                      Cam=EM.vs.OM.Video.camera2%>%
-                        filter(COMMON_NAME%in%This.sp)%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Camera"),
-                      Obs=EM.vs.OM.DATA%>%
-                        filter(sheet_no%in%unique(Video.camera2$sheet_no) & 
-                                 COMMON_NAME%in%This.sp)%>%
-                        mutate(method=ifelse(method=="GN","Gillnet",
-                                             ifelse(method=="LL","Longline",
-                                                    NA)))%>%
-                        group_by(COMMON_NAME,method)%>%
-                        summarise(n=sum(number))%>%
-                        mutate(Platform="Observer"),
-                      LGN="top",
-                      TITL="Discarded species")
-
-fig=ggarrange(p1+rremove("xlab"), p2+rremove("xlab"),
-              ncol = 1, nrow = 2,
-              common.legend=TRUE)
-annotate_figure(fig,bottom = text_grob("Number of individuals",size = 18))
-ggsave(le.paste("Camera2_v_Observer/Barplot.tiff"),width = 12,height = 12,compression = "lzw")
-
-
-#2. Statistical comparison  
-Out=fn.compare.obs.cam(CAM=EM.vs.OM.Video.camera2,
-                       OBS=EM.vs.OM.DATA%>%
-                         filter(sheet_no%in%unique(EM.vs.OM.Video.camera2$sheet_no)),   
-                       GROUP='Top20',
-                       Terms='Platform',
-                       Minobs.per=Minobs.per)
-#export data issues
-write.csv(Out$out.for.Jack,le.paste("Camera2_v_Observer/out.for.Jack.csv"),row.names=F)
-
-#export Raw data comparison
-Out$p.ind
-ggsave(le.paste("Camera2_v_Observer/raw.tiff"),width = 12,height = 10,compression = "lzw")
-
-Out$p.sp
-ggsave(le.paste("Camera2_v_Observer/raw_species.tiff"),width = 12,height = 10,compression = "lzw")
-
-
-#export GLMS
-ft <- as_flextable(Out$mod_all.species$mod)
-save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species.png"))
-ft <- as_flextable(Out$mod_commercial.species$mod)
-save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_commercial.species.png"))
-ft <- as_flextable(Out$mod_discarded.species$mod)
-save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_discarded.species.png"))
-
-fig=ggarrange(Out$mod_all.species$p+rremove("xlab")+rremove("ylab"),
-              Out$mod_commercial.species$p+rremove("xlab")+rremove("ylab"),
-              Out$mod_discarded.species$p+rremove("xlab")+rremove("ylab"),
-              ncol = 1, nrow = 3,
-              common.legend=TRUE)
-annotate_figure(fig,
-                bottom = text_grob("Number of individuals reported by observer",size = 18),
-                left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
-ggsave(le.paste("Camera2_v_Observer/GLM_preds.tiff"),width = 8,height = 12,compression = "lzw")
-
-
-#export Percentage difference
-Out$Per.dif
-ggsave(le.paste("Camera2_v_Observer/Percentage.difference.tiff"),width = 10,height = 12,compression = "lzw")
-
-#Out$Per.dif.com
-#ggsave(le.paste("Camera2_v_Observer/Percentage.difference_com.tiff"),width = 10,height = 12,compression = "lzw")
-
-# Out$Per.dif.dis
-# ggsave(le.paste("Camera2_v_Observer/Percentage.difference_disc.tiff"),width = 10,height = 12,compression = "lzw")
-
-
-#export MDS
-fig=ggarrange(Out$p.GN, Out$p.LL,
-              ncol = 1, nrow = 2,
-              common.legend=TRUE)
-ggsave(le.paste("Camera2_v_Observer/MDS.tiff"),width = 8,height = 12,compression = "lzw")
-
-
-#export Permanovas
-write.csv(Out$adon.GN,le.paste("Camera2_v_Observer/Permanova_GN.csv"),row.names = T)
-write.csv(Out$adon.LL,le.paste("Camera2_v_Observer/Permanova_LL.csv"),row.names = T)
 
 
 #---------Gilled or bagged ------------ 
