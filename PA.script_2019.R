@@ -3666,7 +3666,9 @@ DATA=DATA%>%
 DATA=DATA%>%mutate(dw=ifelse(CAES_Code %in% 35000:39100,pl,NA),
                    Size=case_when(taxa=='Elasmobranch'~fl,
                                   taxa=='Teleost'~tl,
-                                  CAES_Code %in% 35000:39100 ~ dw))
+                                  CAES_Code %in% 35000:39100 ~ dw),
+                   Size=ifelse(is.na(Size) & is.na(fl) & CAES_Code%in%(13000:13016),tl,Size),
+                   Size=ifelse(is.na(Size) & CAES_Code %in% 35000:39100,dw,Size))
 
 
 #---------Add total weight for main species to PA observer data------------
@@ -7595,7 +7597,14 @@ if(do.camera.VS.observer)
                                  grepl('jacket',tolower(COMMON_NAME))~'Leatherjackets',
                                  grepl('guitarfish',tolower(COMMON_NAME))~'Guitarfish & shovelnose rays',
                                  grepl(paste(c("gummy shark","whiskery shark"),collapse = '|'),tolower(COMMON_NAME))~"Gummy/Whiskery sharks",
-                                 TRUE~COMMON_NAME))
+                                 TRUE~COMMON_NAME))%>%
+    mutate(Size=case_when(is.na(Size) & taxa=='Elasmobranch'~fl,
+                          is.na(Size) & taxa=='Teleost'~tl,
+                          is.na(Size) & CAES_Code %in% 35000:39100 ~ dw,
+                          TRUE~Size),
+           Size=ifelse(is.na(Size) & is.na(fl) & CAES_Code%in%(13000:13016),tl,Size),
+           Size=ifelse(is.na(Size) & CAES_Code %in% 35000:39100,dw,Size))
+  
   Reset.disc.ret=EM.vs.OM.DATA%>% 
     filter(!is.na(retainedflag))%>%
     filter(!is.na(COMMON_NAME) & !COMMON_NAME=='')%>%
@@ -7693,7 +7702,7 @@ if(do.camera.VS.observer)
   This.sp=TAB.comm%>%pull(COMMON_NAME)
   This.sp.other=TAB.comm%>%filter(Percent>=95)%>%pull(COMMON_NAME)
   id.Othersharks=match("Other sharks",This.sp)
-  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)
+  if(length(id.Othersharks)) This.sp.other=c("Other sharks",This.sp.other)  
   p1=fn.obs_cam.barplot(n.shots=EM.vs.OM.DATA%>%
                           filter(sheet_no%in%unique(Video.camera1$sheet_no))%>%
                           distinct(sheet_no,method)%>%
@@ -7794,7 +7803,13 @@ if(do.camera.VS.observer)
     #QuasiPois.mod <- glm(Camera ~ Observer * method, family=quasipoisson(link = "identity"), data=d1)
     #NB.mod <- glm.nb(Camera ~ Observer * method, data=d1, link='identity')
     
+    dd=dd%>%
+      group_by(sheet_no)%>%
+      mutate(Total.catch=sum(Observer,na.rm=T))
+    
     mod <- glm(Camera ~ Observer + method , family="gaussian", data=dd)
+    #mod <- glm(Camera ~ Observer + method +Total.catch, family="gaussian", data=dd)
+    mod_mean.size <- glm(Camera ~ Observer + method +Mean.size, family="gaussian", data=dd%>%filter(!is.na(Mean.size)))
     mod_species <- glm(Camera ~ Observer + method + COMMON_NAME, family="gaussian", data=dd)
     Over.dispesion=check_overdispersion(mod)
     D2.mod=D2(mod$null.deviance,mod$deviance)
@@ -7828,7 +7843,7 @@ if(do.camera.VS.observer)
              high=Estimate+1.96*SE,
              Coef=c("Intercept","Slope"))
     
-    return(list(mod=mod,mod_species=mod_species,p=p,Over.dispesion=Over.dispesion,COEF=COEF))
+    return(list(mod=mod,mod_mean.size=mod_mean.size,mod_species=mod_species,p=p,Over.dispesion=Over.dispesion,COEF=COEF))
   }
   lolipop=function(x,disc.sp)
   {
@@ -7890,6 +7905,26 @@ if(do.camera.VS.observer)
                     ifelse(method=="LL","Longline",
                     method)),
              n=ifelse(is.na(n),0,n))
+    
+    #add mean size
+    Mean.size.sheet=OBS%>%
+      group_by(COMMON_NAME,sheet_no)%>%
+      summarise(Mean.size.sheet=mean(Size,na.rm=T))
+    Mean.size.sp=OBS%>%
+      group_by(COMMON_NAME)%>%
+      summarise(Mean.size.sp=mean(Size,na.rm=T))%>%
+      ungroup()%>%
+      mutate(Mean.size.sp=case_when(is.na(Mean.size.sp) & COMMON_NAME=='Brownspotted wrasse'~40,
+                                    is.na(Mean.size.sp) & COMMON_NAME=='Green moray'~50,
+                                    is.na(Mean.size.sp) & COMMON_NAME=='Guitarfish & shovelnose rays'~150,
+                                    is.na(Mean.size.sp) & COMMON_NAME=='Other sharks'~100,
+                                    is.na(Mean.size.sp) & COMMON_NAME=='Spearfish Remora'~40,
+                                    is.na(Mean.size.sp) & COMMON_NAME=='Western stingaree'~45,
+                                    TRUE~Mean.size.sp))
+    d=d%>%
+        left_join(Mean.size.sheet,by=c('COMMON_NAME','sheet_no'))%>%
+        left_join(Mean.size.sp,by=c('COMMON_NAME'))%>%
+        mutate(Mean.size=ifelse(!is.na(Mean.size.sheet),Mean.size.sheet,Mean.size.sp))
     
     #extract non-match data for review
     out.for.Jack=d%>%
@@ -8105,6 +8140,15 @@ if(do.camera.VS.observer)
   save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species.docx"))
   save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species.png"))
   
+  ft <- as_flextable(Out$mod_all.species$mod_mean.size)   
+  save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species_mean.size.docx"))
+  save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species_mean.size.png"))
+  
+  ft <- as_flextable(Out$mod_all.species$mod_species)   
+  save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species_species.docx"))
+  save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_all.species_species.png"))
+  
+  
   ft <- as_flextable(Out$mod_commercial.species$mod)
   save_as_docx(ft, path = le.paste("Camera_v_Observer/GLM_mod_commercial.species.docx"))
   save_as_image(ft, path = le.paste("Camera_v_Observer/GLM_mod_commercial.species.png"))
@@ -8123,7 +8167,7 @@ if(do.camera.VS.observer)
                   left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
   ggsave(le.paste("Camera_v_Observer/GLM_preds_by.data.set.tiff"),width = 8,height = 12,compression = "lzw")
   
-  Out$mod_all.species$p
+  Out$mod_all.species$p+labs(subtitle='') 
   ggsave(le.paste("Camera_v_Observer/GLM_preds.tiff"),width = 6,height = 6,compression = "lzw")
   
   #export Percentage difference
@@ -8345,6 +8389,15 @@ if(do.camera.VS.observer)
   save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species.docx"))
   save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species.png"))
   
+  ft <- as_flextable(Out$mod_all.species$mod_mean.size)   
+  save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species_mean.size.docx"))
+  save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species_mean.size.png"))
+  
+  ft <- as_flextable(Out$mod_all.species$mod_species)   
+  save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species_species.docx"))
+  save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_all.species_species.png"))
+  
+  
   ft <- as_flextable(Out$mod_commercial.species$mod)
   save_as_docx(ft, path = le.paste("Camera2_v_Observer/GLM_mod_commercial.species.docx"))
   save_as_image(ft, path = le.paste("Camera2_v_Observer/GLM_mod_commercial.species.png"))
@@ -8363,7 +8416,7 @@ if(do.camera.VS.observer)
                   left = text_grob("Number of individuals recorded by camera",size = 18,rot = 90))
   ggsave(le.paste("Camera2_v_Observer/GLM_preds_by.data.set.tiff"),width = 8,height = 12,compression = "lzw")
   
-  Out$mod_all.species$p
+  Out$mod_all.species$p+labs(subtitle='')
   ggsave(le.paste("Camera2_v_Observer/GLM_preds.tiff"),width = 6,height = 6,compression = "lzw")
   
   
