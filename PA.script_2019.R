@@ -3495,13 +3495,80 @@ Video.longline.obs=cbind(Video.longline.obs,empty_df)
 Video.longline.obs=Video.longline.obs[,colnames(Video.longline.interaction)]
 Video.longline.interaction=rbind(Video.longline.interaction,Video.longline.obs)
 
-  #some manipulations                       
+  #some manipulations                    
+Video.net.interaction=Video.net.interaction%>%
+  mutate(Code=case_when(is.na(Code) &Species=='seven legged starfish'~25154008,
+                        is.na(Code) &Species=='commorant'~40048000,
+                        is.na(Code) & Genus=='Neophoca' & Species=='cinerea'~41131005,
+                        is.na(Code) & Genus=='Megaptera' & Species=='novaeangliae'~41112006,
+                        is.na(Code) & Family=='Blenniidae'~37408000,
+                        is.na(Code) & Family=='Pleuronectidae'~37461916,
+                        is.na(Code) & Family=='Cheloniidae'~	39020000,
+                        is.na(Code) & Genus=='Scorpis' & Species=='Aequipinnis'~37361004,
+                        is.na(Code) & Genus=='Mola' & Species=='alexandrini'~37470001,
+                        TRUE~Code),
+       Genus=case_when(Code==23617909~'Sepioteuthis',
+                       Code==23607901~'Sepia',
+                       Species=='seven legged starfish'~'Astrostole',
+                       TRUE~Genus),
+       Species=case_when(Code%in%c(23607901,23617909)~'spp.',
+                         Species=='seven legged starfish'~'scabra',
+                         TRUE~Species),
+       Family=case_when(Code%in%c(24388000)~'Aplysiidae',   
+                        Code==40048000~'Phalacrocoracidae',
+                        Code==28850901~'Brachyura',
+                        Code==23659921~'Octopodidae',
+                        Code%in%c(37099999,99999999)~'Osteichthyes',
+                        TRUE~Family),
+       taxa=case_when(taxa%in%c('squid','cuttlefish','seven legged starfish')~ paste(Genus,Species),
+                      taxa%in%c('unknown fish','baitfish','crab','commorant','bird','sea hare')~Family,
+                      Code%in%c(37408000,37461916,23659921,40048000,99999999)~Family,
+                      TRUE~taxa),
+       taxa.to.mutate=case_when(taxa.to.mutate%in%c('squid','cuttlefish','seven legged starfish')~ paste(Genus,Species),
+                                taxa.to.mutate%in%c('unknown fish','baitfish','crab','commorant','bird','sea hare')~Family,
+                                Code%in%c(37408000,37461916,23659921,40048000,99999999)~Family,  
+                                TRUE~taxa.to.mutate))
+
+Video.longline.interaction=Video.longline.interaction%>%
+  mutate(Code=case_when(is.na(Code) &Species=='seven legged starfish'~25154008,
+                        is.na(Code) &Species=='commorant'~40048000,
+                        is.na(Code) & Genus=='Neophoca' & Species=='cinerea'~41131005,
+                        is.na(Code) & Genus=='Megaptera' & Species=='novaeangliae'~41112006,
+                        is.na(Code) & Family=='Blenniidae'~37408000,
+                        is.na(Code) & Family=='Pleuronectidae'~37461916,
+                        is.na(Code) & Family=='Cheloniidae'~	39020000,
+                        is.na(Code) & Genus=='Scorpis' & Species=='Aequipinnis'~37361004,
+                        is.na(Code) & Genus=='Mola' & Species=='alexandrini'~37470001,
+                        TRUE~Code),
+       Genus=case_when(Code==23617909~'Sepioteuthis',
+                       Code==23607901~'Sepia',
+                       Species=='seven legged starfish'~'Astrostole',
+                       TRUE~Genus),
+       Species=case_when(Code%in%c(23607901,23617909)~'spp.',
+                         Species=='seven legged starfish'~'scabra',
+                         TRUE~Species),
+       Family=case_when(Code%in%c(24388000)~'Aplysiidae',   
+                        Code==40048000~'Phalacrocoracidae',
+                        Code==28850901~'Brachyura',
+                        Code==23659921~'Octopodidae',
+                        Code%in%c(37099999,99999999)~'Osteichthyes',
+                        TRUE~Family),
+       taxa=case_when(taxa%in%c('squid','cuttlefish','seven legged starfish')~ paste(Genus,Species),
+                      taxa%in%c('unknown fish','baitfish','crab','commorant','bird','sea hare')~Family,
+                      Code%in%c(37408000,37461916,23659921,40048000,99999999)~Family,
+                      TRUE~taxa),
+       taxa.to.mutate=case_when(taxa.to.mutate%in%c('squid','cuttlefish','seven legged starfish')~ paste(Genus,Species),
+                                taxa.to.mutate%in%c('unknown fish','baitfish','crab','commorant','bird','sea hare')~Family,
+                                Code%in%c(37408000,37461916,23659921,40048000,99999999)~Family,  
+                                TRUE~taxa.to.mutate))
+
 Video.net.interaction=Video.net.interaction%>%
               mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                         Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                         Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                        Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                                        Code >=3.747e7 & Code<=4.0e+07 ~"Turtles",
+                                        Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                        Code ==99999999 ~"Scalefish",
+                                        Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                         Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                         Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                         Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -3539,8 +3606,9 @@ Video.longline.interaction=Video.longline.interaction%>%
               mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                         Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                         Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                        Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
-                                        Code >=3.747e7 & Code<=4.0e+07 ~"Turtles",
+                                        Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                        Code ==99999999 ~"Scalefish",
+                                        Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                         Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                         Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                         Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -3574,7 +3642,9 @@ Video.net.maxN=Video.net.maxN%>%
               mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                         Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                         Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                        Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                        Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                        Code ==99999999 ~"Scalefish",
+                                        Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                         Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                         Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                         Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -3592,7 +3662,9 @@ Video.longline.maxN=Video.longline.maxN%>%
                 mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                           Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                           Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                          Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                          Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                          Code ==99999999 ~"Scalefish",
+                                          Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                           Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                           Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                           Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -5973,23 +6045,103 @@ TEP.groups=c("Marine mammals","Seabirds","Reptiles","Turtles")
 if(do.general.underwater)
 {
 
-  #Mean soak time by gear
-  DATA%>%
-    distinct(sheet_no,.keep_all=T)%>%
-    group_by(method)%>%
-    summarise(Mean=mean(soak.time,na.rm=T),
-              MIN=min(soak.time,na.rm=T),
-              MAX=max(soak.time,na.rm=T))%>%
-    arrange(method)
+  #Table Mean soak time by gear
+  Mean.soak.time=DATA%>%
+                  distinct(sheet_no,.keep_all=T)%>%
+                  group_by(method)%>%
+                  summarise(Mean=mean(soak.time,na.rm=T),
+                            MIN=min(soak.time,na.rm=T),
+                            MAX=max(soak.time,na.rm=T))%>%
+                  arrange(method)
+  write.csv(Mean.soak.time,le.paste("Video/underwater/Table_Mean soak time by gear.csv"),row.names = F)
+  
+  #Table number of shots, camera deployments and hours of footage by gear
+  Table.underwater.shots.hours.deployments=data.frame(
+    method=c('Gillnet','Longline'),
+    Shots=c(length(unique(Video.net.interaction$sheet_no)),length(unique(Video.longline.interaction$sheet_no))),
+    Camera.deployments=c(length(unique(Video.net.interaction$OpCode)),length(unique(Video.longline.interaction$OpCode))),
+    Hours.of.footage=c(hours.underwater.gn,hours.underwater.ll))
+  write.csv(Table.underwater.shots.hours.deployments,le.paste("Video/underwater/Table_Shots_deployments_hours.csv"),row.names = F)
+  
+
+  #Combine data sets
+  #note: must treat 'swim past' and 'swim through' as  MaxN per shot
+  Dat.comb=rbind(Video.longline.interaction%>%
+                   distinct(OpCode,sheet_no,Method,Interaction,Number,SP.group,
+                            Family,Genus,Species,taxa,taxa.to.mutate,Code),
+                 Video.net.interaction%>%
+                   distinct(OpCode,sheet_no,Method,Interaction,Number,SP.group,
+                            Family,Genus,Species,taxa,taxa.to.mutate,Code))%>%
+            filter(!taxa%in%c("no fish","no haul","snail"))%>%
+    filter(!Interaction=='Missing data')%>%
+    filter(!Interaction%in%NA)%>%
+    mutate(Method=capitalize(Method))
+  
+  Dat.comb.swim=Dat.comb%>%filter(grepl('Swim',Interaction))
+  Dat.comb=Dat.comb%>%filter(!grepl('Swim',Interaction))
+  
+  Dat.comb.swim=Dat.comb.swim%>%
+    group_by(OpCode,sheet_no,Method,Interaction,Number,SP.group,
+             Family,Genus,Species,taxa,taxa.to.mutate,Code)%>%
+    mutate(MaxN=max(Number,na.rm=T))%>%
+    ungroup()%>%
+    mutate(MaxN=ifelse(MaxN=='-Inf',NA,MaxN))%>%
+    group_by(sheet_no,Method,Interaction,SP.group,Family,Genus,Species,taxa,taxa.to.mutate,Code)%>%
+    filter(MaxN==max(MaxN,na.rm=T))%>%
+    ungroup()%>%
+    dplyr::select(-MaxN)
+  
+  Dat.comb=rbind(Dat.comb,Dat.comb.swim)%>%
+    mutate(Interaction=ifelse(grepl('Caught',Interaction),'Caught',Interaction))
+  
+  #Table of species and behaviours 
+  Tabl1=Dat.comb%>%
+    group_by(taxa,Code,SP.group,Interaction)%>%
+    summarise(Number=sum(Number,na.rm=T))%>%
+    ungroup%>%
+    spread(Interaction,Number,fill='')%>%
+    arrange(SP.group,taxa)%>%
+    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by='Code')%>%
+    mutate(COMMON_NAME=case_when(is.na(COMMON_NAME) & Code==25154008 ~'Seven legged starfish',
+                                 is.na(COMMON_NAME) & Code==23607901 ~'Cuttlefish',
+                                 is.na(COMMON_NAME) & Code==23617909 ~'Squid',
+                                 is.na(COMMON_NAME) & Code==41112006 ~'Humpback whale',
+                                 is.na(COMMON_NAME) & Code==37038902 ~'Stingarees',
+                                 is.na(COMMON_NAME) & Code==37337915 ~'Trevallies',
+                                 is.na(COMMON_NAME) & Code==37408000 ~'Blennies',
+                                 is.na(COMMON_NAME) & Code==37311919 ~'Seaperches',
+                                 is.na(COMMON_NAME) & Code==37337916 ~'Seaperches',
+                                 is.na(COMMON_NAME) & Code==37337917 ~'Trevallies',
+                                 is.na(COMMON_NAME) & Code==37365905 ~'Butterflyfishes',
+                                 is.na(COMMON_NAME) & Code==37372907 ~'Damselfishes',
+                                 is.na(COMMON_NAME) & Code==37337901 ~'Trevallies',
+                                 is.na(COMMON_NAME) & Code==37465902 ~'Leatherjackets',
+                                 is.na(COMMON_NAME) & Code==37465921 ~'Leatherjackets',
+                                 is.na(COMMON_NAME) & Code==37259902 ~'Pineapplefishes',
+                                 is.na(COMMON_NAME) & Code==37099999 ~'Osteichthyes',
+                                 is.na(COMMON_NAME) & Code==37390901 ~'Grubfishes',
+                                 is.na(COMMON_NAME) & Code==37357903 ~'Bullseyes',
+                                 is.na(COMMON_NAME) & Code==37461916 ~'Righteye flounders',
+                                 is.na(COMMON_NAME) & Code==37365916 ~'Angelfishes',
+                                 is.na(COMMON_NAME) & Code==37372918 ~'Damselfishes',
+                                 is.na(COMMON_NAME) & Code==37460919 ~'Sand flounders',
+                                 is.na(COMMON_NAME) & Code==37330904 ~'Whitings',
+                                 is.na(COMMON_NAME) & Code==37467912 ~'Toadfishes',
+                                 is.na(COMMON_NAME) & Code==37337904 ~'Trevallies',
+                                 is.na(COMMON_NAME) & Code==37337907 ~'Trevallies',
+                                 is.na(COMMON_NAME) & Code==39020000 ~'Sea turtle',
+                                 TRUE~COMMON_NAME))%>%
+    distinct(COMMON_NAME,taxa,.keep_all = T)%>%
+    rename(Scientific.name=taxa)%>%
+    dplyr::select(-Code)%>%
+    relocate(SP.group,COMMON_NAME,Scientific.name)
+  write.csv(Tabl1,le.paste("Video/underwater/Table_species & interactions.csv"),row.names = F)
+  
   
   #1. number of events 
-  
-  #1.1. by gear and species group
-  rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species),
-        Video.net.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species))%>%
-    filter(!Species=='birds feeding at surface')%>%
-    filter(!SP.group%in%TEP.groups)%>%
-    filter(!Interaction=='Missing data')%>%
+    #1.1. by gear and species group          
+  Tab=Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
     filter(!SP.group%in%NA)%>%
     mutate(Number=1,
            Method=capitalize(Method))%>%
@@ -5997,11 +6149,16 @@ if(do.general.underwater)
     tally(Number)%>%
     filter(!is.na(Interaction))%>%
     mutate(Interaction=capitalize(tolower(Interaction)),
-           SP.group=factor(SP.group,levels=SP.group.levels))%>%
+           SP.group=factor(SP.group,levels=SP.group.levels))
+  write.csv(Tab%>%spread(Interaction,n,fill='')%>%arrange(Method,SP.group),
+            le.paste("Video/underwater/Interactions_number.events_sqrt.transf_by.group.csv"),row.names = F)
+  
+  Tab%>%
     ggplot(aes(fill=Method, y=n, x=Interaction)) + 
     geom_bar(position="dodge", stat="identity")+
     coord_flip() + scale_y_sqrt()+
     facet_wrap(~SP.group,dir='h',scales='free_x')+ 
+    theme_PA(strx.siz=17,leg.siz=18,axs.t.siz=14,axs.T.siz=16)+ 
     theme(legend.position = "top",
           strip.text = element_text(size = 16),
           legend.title = element_blank(),
@@ -6012,22 +6169,27 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_number.events_sqrt.transf_by.group.tiff"),
          width = 12,height = 10,compression = "lzw")
   
-  #1.2. by gear
-  rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species),
-        Video.net.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species))%>%
-    filter(!Species=='birds feeding at surface')%>%
-    filter(!SP.group%in%TEP.groups)%>%
+    #1.2. by gear
+  Tab=Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
+    filter(!SP.group%in%NA)%>%
     filter(!Interaction=='Missing data')%>%
     mutate(Number=1,
            Method=capitalize(Method))%>%
     group_by(Method,Interaction)%>%
     tally(Number)%>%
     filter(!is.na(Interaction))%>%
-    mutate(Interaction=capitalize(tolower(Interaction)))%>%
+    mutate(Interaction=capitalize(tolower(Interaction)))
+  write.csv(Tab%>%spread(Interaction,n,fill='')%>%arrange(Method),
+            le.paste("Video/underwater/Interactions_number.events_sqrt.transf.csv"),row.names = F)
+  Tab_total_non_ETPs=Tab%>%group_by(Interaction)%>%summarise(n=sum(n))%>%rename(Non_ETPs=n)
+  
+  Tab%>%
     ggplot(aes(fill=Method, y=n, x=Interaction)) + 
     geom_bar(position="dodge", stat="identity")+
     coord_flip() + scale_y_sqrt()+
     facet_wrap(~Method,dir='h',scales='free_x')+ 
+    theme_PA(strx.siz=17,leg.siz=18,axs.t.siz=14,axs.T.siz=16)+ 
     theme(legend.position = "top",
           strip.text = element_text(size = 16),
           legend.title = element_blank(),
@@ -6038,14 +6200,96 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_number.events_sqrt.transf.tiff"),width = 12,height = 8,compression = "lzw")
   
   
+  #1.3. ETPs by gear
+   Dat.comb.ETPs=Dat.comb%>%
+    filter(SP.group%in%TEP.groups | Code%in%TEPS_Shark.rays)%>%
+    mutate(Interaction=capitalize(tolower(Interaction)),
+           Species=case_when(taxa=='Bathytoshia brevicaudata' ~ 'Smooth stingray',
+                             taxa=='Carcharias taurus' ~ 'Grey nurse shark',
+                             taxa=='Carcharodon carcharias' ~ 'White shark',
+                             taxa=='Cheloniidae spp' ~ 'Sea turtle',
+                             taxa=='Megaptera novaeangliae' ~ 'Humpback whale',
+                             taxa=='Phalacrocoracidae' ~ 'Cormorants',
+                             taxa=='Neophoca cinerea' ~ 'Australian sea-lion'))
+  
+  TEPS.cols1=TEPS.cols
+  names(TEPS.cols1)[match('Green turtle',names(TEPS.cols1))]='Sea turtle'
+  TEPS.cols1=TEPS.cols1[match(unique(Dat.comb.ETPs$Species),names(TEPS.cols1))]
+  Dat.comb.ETPs=Dat.comb.ETPs%>%
+    mutate(Species=factor(Species,levels=names(TEPS.cols1)))
+  
+    #1.3.1 barplot  
+  Tab=Dat.comb.ETPs%>%
+    group_by(Method,Interaction,Species)%>%
+    tally(Number)
+  write.csv(Tab%>%spread(Interaction,n,fill='')%>%arrange(Method,Species),
+            le.paste("Video/underwater/Interactions_number.events_ETPs.csv"),row.names = F)
+  
+  write.csv(Tab_total_non_ETPs%>%
+              left_join(Tab%>%group_by(Interaction)%>%summarise(n=sum(n))%>%rename(ETPs=n),
+                        by='Interaction')%>%
+              mutate(ETPs=ifelse(is.na(ETPs),0,ETPs),
+                     Percent_ETP=100*ETPs/(ETPs+Non_ETPs)),
+            le.paste("Video/underwater/Table_Percent ETPs_event_interactions.csv"),row.names = F)
+  
+  Tab%>%
+    filter(!is.na(Interaction))%>%
+    mutate(Interaction=capitalize(tolower(Interaction)))%>%
+    ggplot(aes(x=Interaction, y=n, fill=Species)) + 
+    geom_bar(position="stack", stat="identity")+
+    coord_flip()+
+    facet_wrap(~Method,dir='h',scales='free_x')+ 
+    theme_PA(str.siz=16,strx.siz=16,leg.siz=17,axs.t.siz=16,axs.T.siz=18)+
+    theme(legend.position = LGN,
+          legend.justification='left',
+          legend.direction='horizontal',
+          legend.title = element_blank())+
+    xlab('')+ylab('Number of events')+
+    scale_y_continuous(breaks = integer_breaks())+
+    guides(fill = guide_legend(nrow = 2))+
+    scale_x_discrete(position = "top")+
+    scale_fill_manual(values=TEPS.cols1, drop=FALSE)
+  ggsave(le.paste("Video/underwater/Interactions_number.events_ETPs.tiff"),width = 12,height = 8,compression = "lzw")
+  
+    #1.3.2 Mosaic plot
+  fn.mosaic=function(d)
+  {
+    TAB=table(d%>%pull(Interaction))
+    lab=c(TAB)
+    lab=paste(names(TAB)," (n= ",lab,")",sep='')
+    names(lab)=names(TAB)
+    
+    p=d%>%
+      ggplot() +
+      geom_mosaic(aes(x = product(Species), fill=Species), na.rm=TRUE) + 
+      labs(x = "",y='', title=unique(d$Method))+
+      facet_wrap(~Interaction,labeller = labeller(Interaction=lab),nrow=1) +
+      labs(fill = "")+
+      scale_fill_manual(values=TEPS.cols1, drop=FALSE)+
+      theme_PA()+
+      theme(legend.position = 'top',axis.text.x=element_blank(), 
+            axis.ticks.x=element_blank(), 
+            axis.text.y=element_blank(), 
+            axis.ticks.y=element_blank())
+    return(p)
+  }
+  p1=fn.mosaic(d=Dat.comb.ETPs%>%filter(Method=='Gillnet'))
+  p2=fn.mosaic(d=Dat.comb.ETPs%>%filter(Method=='Longline'))
+  ggarrange(plotlist=list(p1+rremove("xlab")+rremove("ylab"),
+                          p2+rremove("xlab")+rremove("ylab")),
+            nrow = 2,
+            common.legend=TRUE)
+  
+  ggsave(le.paste("Video/underwater/Interactions_number.events_ETPs_mosaic.tiff"), 
+         width = 9,height = 6,compression = "lzw")
+  
   
   #2. Number of individuals  
-  #2.1. by gear and species group
-  rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species),
-        Video.net.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species))%>%
-    filter(!Species=='birds feeding at surface')%>%
-    filter(!SP.group%in%TEP.groups)%>%
+    #2.1. by gear and species group
+  Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
     filter(!SP.group%in%NA)%>%
+    filter(!Interaction=='Missing data')%>%
     mutate(Method=capitalize(Method))%>%
     group_by(Method,Interaction,SP.group)%>%
     summarise(n=sum(Number,na.rm=T))%>%
@@ -6065,11 +6309,11 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_number.individuals_sqrt.transf_by.group.tiff"),
          width = 15,height = 10,compression = "lzw")
   
-  #2.2. by gear
-  rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species),
-        Video.net.interaction%>%dplyr::select(Method,Interaction,Number,SP.group,Species))%>%
-    filter(!Species=='birds feeding at surface')%>%
-    filter(!SP.group%in%TEP.groups)%>%
+    #2.2. by gear
+  Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
+    filter(!SP.group%in%NA)%>%
+    filter(!Interaction=='Missing data')%>%
     mutate(Method=capitalize(Method))%>%
     group_by(Method,Interaction)%>%
     summarise(n=sum(Number,na.rm=T))%>%
@@ -6088,7 +6332,7 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_number.individuals_sqrt.transf.tiff"),
          width = 13,height = 8,compression = "lzw")
   
-  #2.3. Main target species only
+    #2.3. Main target species only 
   these.codes=c(37018003,37017003,37017001,37018007,
                 37377004,37384002,37320004,37353001)
   dummy=data.frame(Code=these.codes,
@@ -6097,8 +6341,10 @@ if(do.general.underwater)
   n.col.elasmos=colfunc(length(these.codes[these.codes<37300000]))
   colfunc <- colorRampPalette(Teleost.palette)  
   n.col.teleos=colfunc(length(these.codes[these.codes>37300000]))
-  d=rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number,Code),
-          Video.net.interaction%>%dplyr::select(Method,Interaction,Number,Code))%>%
+  d=Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
+    filter(!SP.group%in%NA)%>%
+    filter(!Interaction=='Missing data')%>%
     mutate(Method=capitalize(Method))%>%
     filter(Code%in%these.codes)%>%
     left_join(dummy,by='Code')%>%
@@ -6172,10 +6418,11 @@ if(do.general.underwater)
   
   #4. Lolipop approach
   
-  #4.1 Lollipop graph of % of interaction types by gear 
-  df=rbind(Video.longline.interaction%>%dplyr::select(Method,Interaction,Number),
-           Video.net.interaction%>%dplyr::select(Method,Interaction,Number))%>%
-    filter(!Interaction=='NA')
+    #4.1 Lollipop graph of % of interaction types by gear 
+  df=Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
+    filter(!SP.group%in%NA)%>%
+    filter(!Interaction=='Missing data')
   df=pct_routine(df, Method, Interaction)
   ggplot(df)+
     geom_linerange(aes(x = Interaction, ymin = 0, ymax = pct, colour = Method), 
@@ -6186,37 +6433,39 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_lollipop.tiff"), 
          width = 6,height = 6,compression = "lzw")
   
-  
-  #4.2 Mosaic plot
-  #gillnet
-  TAB=table(Video.net.interaction$Interaction)
-  lab=c(TAB)
-  lab=paste(names(TAB)," (n= ",lab,")",sep='')
-  names(lab)=names(TAB)
-  
-  ggplot(data = Video.net.interaction) +
-    geom_mosaic(aes(x = product(SP.group), fill=SP.group), na.rm=TRUE) + 
-    labs(x = "",y='', title='Gillnet')+
-    facet_wrap(~Interaction,labeller = labeller(Interaction=lab)) + labs(fill = "")
-  ggsave(le.paste("Video/underwater/Interactions_mosaic_gillnet.tiff"), 
-         width = 9,height = 6,compression = "lzw")
-  
-  #longline
-  TAB=table(Video.longline.interaction$Interaction)
-  lab=c(TAB)
-  lab=paste(names(TAB)," (n= ",lab,")",sep='')
-  names(lab)=names(TAB)
-  
-  ggplot(data = Video.longline.interaction %>% filter(!is.na(Interaction))) +
-    geom_mosaic(aes(x = product(SP.group), fill=SP.group), na.rm=TRUE) + 
-    labs(x = "",y='', title='Longline')+
-    facet_wrap(~Interaction,labeller = labeller(Interaction=lab)) + labs(fill = "")
-  ggsave(le.paste("Video/underwater/Interactions_mosaic_longline.tiff"), 
-         width = 9,height = 6,compression = "lzw")
-  
-  
-  
-  
+    #4.2 Mosaic plot
+  do.mosaic=FALSE #wrong, not using MaxN
+  if(do.mosaic)
+  {
+    #gillnet
+    TAB=table(Video.net.interaction$Interaction)
+    lab=c(TAB)
+    lab=paste(names(TAB)," (n= ",lab,")",sep='')
+    names(lab)=names(TAB)
+    
+    ggplot(data = Video.net.interaction) +
+      geom_mosaic(aes(x = product(SP.group), fill=SP.group), na.rm=TRUE) + 
+      labs(x = "",y='', title='Gillnet')+
+      facet_wrap(~Interaction,labeller = labeller(Interaction=lab)) + labs(fill = "")
+    ggsave(le.paste("Video/underwater/Interactions_mosaic_gillnet.tiff"), 
+           width = 9,height = 6,compression = "lzw")
+    
+    #longline
+    TAB=table(Video.longline.interaction$Interaction)
+    lab=c(TAB)
+    lab=paste(names(TAB)," (n= ",lab,")",sep='')
+    names(lab)=names(TAB)
+    
+    ggplot(data = Video.longline.interaction %>% filter(!is.na(Interaction))) +
+      geom_mosaic(aes(x = product(SP.group), fill=SP.group), na.rm=TRUE) + 
+      labs(x = "",y='', title='Longline')+
+      facet_wrap(~Interaction,labeller = labeller(Interaction=lab)) + labs(fill = "")
+    ggsave(le.paste("Video/underwater/Interactions_mosaic_longline.tiff"), 
+           width = 9,height = 6,compression = "lzw")
+    
+  }
+   
+  #ACA
   #5. Test differences in interactions by method and species group from underwater camera
   fn.mds=function(tav,COM,SUBT)
   {
@@ -6288,14 +6537,6 @@ if(do.general.underwater)
                 by="Code")%>%
       mutate(SPECIES=paste(Genus,Species))
     if(what=='Events') d=d%>%mutate(Number=1)
-    
-    #Table of all behaviours by species
-    TAB=d%>%
-      group_by(Method,SP.group,Interaction,COMMON_NAME,SPECIES)%>%
-      summarise(N=sum(Number))%>%
-      spread(Interaction,N,fill='')%>%
-      arrange(Method,SP.group,COMMON_NAME)
-    write.csv(TAB,le.paste("Video/underwater/Table_number.interactions.by.species.csv"),row.names=F)
     
     
     #Multivariate - differences in behaviours between method and species group
@@ -7466,7 +7707,9 @@ if(do.camera.VS.observer)
       mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                 Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                 Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                Code ==99999999 ~"Scalefish",
+                                Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                 Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                 Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                 Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -7495,7 +7738,9 @@ if(do.camera.VS.observer)
       mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                 Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                 Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                Code ==99999999 ~"Scalefish",
+                                Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                 Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                 Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                 Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -8211,7 +8456,9 @@ if(do.camera.VS.observer)
       mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                 Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                 Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                Code ==99999999 ~"Scalefish",
+                                Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                 Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                 Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                 Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
@@ -8240,7 +8487,9 @@ if(do.camera.VS.observer)
       mutate(SP.group=case_when(Code >=3.7e7 & Code<=3.70241e7 ~"Sharks",
                                 Code >3.7025e7 & Code<=3.7041e7 ~"Rays",
                                 Code >=3.7042e7 & Code<=3.7044e7 ~"Chimaeras",
-                                Code >=3.7046e7 & Code<=3.747e7 ~"Scalefish",
+                                Code >=3.7046e7 & Code<3.900e7 ~"Scalefish",
+                                Code ==99999999 ~"Scalefish",
+                                Code >=3.900e7 & Code<=4.0e+07 ~"Turtles",
                                 Code >=4.1e+07 & Code<=4.115e+07 ~"Marine mammals",
                                 Code >=4.0e+07 & Code<4.1e+07 ~"Seabirds",
                                 Code >=1.2e7 & Code<3.7e7 ~"Invertebrates",
