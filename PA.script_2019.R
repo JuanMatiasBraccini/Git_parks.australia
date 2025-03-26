@@ -6156,6 +6156,9 @@ if(do.general.underwater)
   Tab%>%
     ggplot(aes(fill=Method, y=n, x=Interaction)) + 
     geom_bar(position="dodge", stat="identity")+
+    geom_text(aes(label = n, group = Method),
+              position = position_dodge(width = 1),
+              vjust = 0, hjust = 1, size = 5,color='black')+
     coord_flip() + scale_y_sqrt()+
     facet_wrap(~SP.group,dir='h',scales='free_x')+ 
     theme_PA(strx.siz=17,leg.siz=18,axs.t.siz=14,axs.T.siz=16)+ 
@@ -6187,6 +6190,10 @@ if(do.general.underwater)
   Tab%>%
     ggplot(aes(fill=Method, y=n, x=Interaction)) + 
     geom_bar(position="dodge", stat="identity")+
+    geom_text(aes(label = n, group = Method),
+              position = position_dodge(width = 1),
+              vjust = 0, hjust = 1, size = 5,color='black')+
+    
     coord_flip() + scale_y_sqrt()+
     facet_wrap(~Method,dir='h',scales='free_x')+ 
     theme_PA(strx.siz=17,leg.siz=18,axs.t.siz=14,axs.T.siz=16)+ 
@@ -6237,10 +6244,13 @@ if(do.general.underwater)
     mutate(Interaction=capitalize(tolower(Interaction)))%>%
     ggplot(aes(x=Interaction, y=n, fill=Species)) + 
     geom_bar(position="stack", stat="identity")+
+    geom_text(aes(label = n),
+              hjust = 0.5, vjust = 0, position = position_stack(vjust = 0.5),
+              size = 5,color='black')+
     coord_flip()+
     facet_wrap(~Method,dir='h',scales='free_x')+ 
     theme_PA(str.siz=16,strx.siz=16,leg.siz=17,axs.t.siz=16,axs.T.siz=18)+
-    theme(legend.position = LGN,
+    theme(legend.position = "top",
           legend.justification='left',
           legend.direction='horizontal',
           legend.title = element_blank())+
@@ -6465,7 +6475,6 @@ if(do.general.underwater)
     
   }
    
-  #ACA
   #5. Test differences in interactions by method and species group from underwater camera
   fn.mds=function(tav,COM,SUBT)
   {
