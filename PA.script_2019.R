@@ -6172,7 +6172,22 @@ if(do.general.underwater)
   ggsave(le.paste("Video/underwater/Interactions_number.events_sqrt.transf_by.group.tiff"),
          width = 12,height = 10,compression = "lzw")
   
-    #1.2. by gear
+  
+    #1.2 Species caught by gear        
+  Tab=Dat.comb%>%
+    filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
+    filter(!SP.group%in%NA)%>%
+    filter(Interaction=="Caught")%>%
+    mutate(Number=1,
+           Method=capitalize(Method))%>%
+    group_by(Method,SP.group,taxa)%>%
+    tally(Number)%>%
+    mutate(SP.group=factor(SP.group,levels=SP.group.levels))
+  write.csv(Tab%>%spread(Method,n,fill='')%>%arrange(SP.group),
+            le.paste("Video/underwater/Interactions_number.events_species.caught.by.gear.csv"),row.names = F)
+  
+  
+    #1.3. by gear
   Tab=Dat.comb%>%
     filter(!SP.group%in%c('Invertebrates',TEP.groups))%>%
     filter(!SP.group%in%NA)%>%
