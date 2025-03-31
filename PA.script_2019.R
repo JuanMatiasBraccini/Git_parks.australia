@@ -546,7 +546,7 @@ write.csv(Lactate.for.Taylor,handl_OneDrive('Students/2020_Taylor Grosse/data.fo
 # names(Observer.LL.data.historic)=tolower(names(Observer.LL.data.historic))
 
 DATA=DATA[grep("PA", DATA$SHEET_NO), ]%>%
-      filter(year>=2020)
+      filter(year>=2020 & year<=2021)
 Tab.vert.samp=DATA%>%
   filter(VERT_SAMPL=='Yes' & !is.na(COMMON_NAME))%>%
   group_by(COMMON_NAME)%>%
@@ -6136,6 +6136,25 @@ if(do.general.underwater)
     dplyr::select(-Code)%>%
     relocate(SP.group,COMMON_NAME,Scientific.name)
   write.csv(Tabl1,le.paste("Video/underwater/Table_species & interactions.csv"),row.names = F)
+  
+  these.codes=c(37018003,37017003,37017001,37018007,
+                37377004,37384002,37320004,37353001)
+  these.codes.discards=c(37007001,37039001)
+  
+  Tabl1=Dat.comb%>%
+    filter(Code%in%c(these.codes.discards,these.codes))%>%
+    mutate(Discarded=ifelse(Code%in%these.codes.discards,'Discarded','Retained'))%>%
+    group_by(Discarded,taxa,Code,Interaction)%>%
+    summarise(Number=sum(Number,na.rm=T))%>%
+    ungroup%>%
+    spread(Interaction,Number,fill='')%>%
+    arrange(Discarded,taxa)%>%
+    left_join(All.species.names%>%dplyr::select(COMMON_NAME,Code),by='Code')%>%
+    rename(Scientific.name=taxa)%>%
+    dplyr::select(-Code)%>%
+    relocate(Discarded,COMMON_NAME,Scientific.name)
+  write.csv(Tabl1,le.paste("Video/underwater/Table_species & interactions_main species.csv"),row.names = F)
+  
   
   
   #1. number of events 
