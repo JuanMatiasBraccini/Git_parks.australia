@@ -174,16 +174,21 @@ IUCN.colors=c("Not evaluated"="grey85","Least concern"="#60C659","Near threatene
 IUCN.Endangered.categories=c("Vulnerable","Endangered","Critically endangered")
 
 Mislabelling.col.vec=c(No='forestgreen',Yes='brown4')
-DATA=DATA%>%
+
+DATA=DATA%>%  
   left_join(IUCN%>%
               dplyr::select(-Common_name_sequenced)%>%
               mutate(IUCN.status=IUCN.status_Australia,
                      IUCN.status=ifelse(is.na(IUCN.status)|IUCN.status=="","Not evaluated",IUCN.status),
-                     WOE_WA=ifelse(is.na(WOE_WA)|WOE_WA=="","Not evaluated",WOE_WA),
-                     WOE_WA=factor(WOE_WA,levels=names(RiskColors)),
-                     IUCN.status=factor(IUCN.status,levels=names(IUCN.colors)),
-                     IUCN.status_global=factor(IUCN.status_global,levels=names(IUCN.colors))),
-            by='Scientific_name_sequenced')
+                     WOE_WA=ifelse(is.na(WOE_WA)|WOE_WA=="","Not evaluated",WOE_WA)),
+            by='Scientific_name_sequenced')%>%
+      mutate(IUCN.status=ifelse(Common_name_sequenced=='Copper shark'& is.na(IUCN.status),'Least concern',IUCN.status),
+             IUCN.status_Australia=ifelse(Common_name_sequenced=='Copper shark'& is.na(IUCN.status_Australia),'Least concern',IUCN.status_Australia),
+             IUCN.status_global=ifelse(Common_name_sequenced=='Copper shark'& is.na(IUCN.status_global),'Vulnerable',IUCN.status_global),
+             WOE_WA=factor(WOE_WA,levels=names(RiskColors)),
+             IUCN.status=factor(IUCN.status,levels=names(IUCN.colors)),
+             IUCN.status_global=factor(IUCN.status_global,levels=names(IUCN.colors)))  
+
 
 
 #Determine match between label and sequencing
@@ -473,6 +478,56 @@ annotate_figure(figure,
                 left = text_grob("Sequenced species", size=16, rot = 90, vjust = 1),
                 bottom = text_grob("Occurrence", size=16))
 ggsave(le.paste("Status_IUCN_only.tiff"),width = 8,height = 8,compression = "lzw")
+
+#IUCN only - paper ACA
+p_IUCN_Oz_paper=DATA%>%
+                  mutate(Common_name_sequenced=capitalize(Scientific_name_sequenced))%>%
+                  group_by(Common_name_sequenced,IUCN.status)%>%
+                  tally()%>%
+                  ggplot() +
+                  geom_bar(aes(x=Common_name_sequenced, y=n, fill = IUCN.status),
+                           stat = "identity")+
+                  theme_bw()+
+                  theme(legend.position = 'top',
+                        legend.title = element_text(size = Lgn.tit),
+                        legend.text = element_text(size = Lgn.txt),
+                        axis.title = element_text(size = 16),
+                        axis.text = element_text(size = 12),
+                        axis.text.y = element_text(face = 'italic'),
+                        panel.grid.major = element_blank(),
+                        panel.grid.minor = element_blank())+
+                  coord_flip()+xlab('Species')+ylab('Occurrence')+
+                  scale_fill_manual("IUCN",values=IUCN.colors,drop=TRUE)+ 
+                  guides(fill = guide_legend(nrow = 1))
+
+p_IUCN_global_paper=DATA%>%
+                mutate(Common_name_sequenced=capitalize(Scientific_name_sequenced))%>%
+                group_by(Common_name_sequenced,IUCN.status_global)%>%
+                tally()%>%
+                ggplot() +
+                geom_bar(aes(x=Common_name_sequenced, y=n, fill = IUCN.status_global),
+                         stat = "identity")+
+                theme_bw()+
+                theme(legend.position = 'top',
+                      legend.title = element_text(size = Lgn.tit),
+                      legend.text = element_text(size = Lgn.txt),
+                      axis.title = element_text(size = 16),
+                      axis.text = element_text(size = 12),
+                      axis.text.y = element_text(face = 'italic'),
+                      panel.grid.major = element_blank(),
+                      panel.grid.minor = element_blank())+
+                coord_flip()+xlab('Species')+ylab('Occurrence')+
+                scale_fill_manual("IUCN",values=IUCN.colors,drop=TRUE)+ 
+                guides(fill = guide_legend(nrow = 1))
+figure=ggarrange(p_IUCN_global_paper+theme(legend.title = element_blank()) + rremove("ylab") + rremove("xlab"),
+                 p_IUCN_Oz_paper + rremove("ylab")  + rremove("xlab"),
+                 labels = c('a)','b)'),
+                 ncol = 1, nrow = 2,common.legend = TRUE)
+annotate_figure(figure, 
+                left = text_grob("Species", size=16, rot = 90, vjust = 1),
+                bottom = text_grob("Occurrence", size=16))
+ggsave(le.paste("Status_IUCN_only_paper.jpeg"),width = 8,height = 8)
+
 
 # Plot 'do_you_know_what_fish_this_is' ----------------------------------------------------------------
 dummy=DATA%>%

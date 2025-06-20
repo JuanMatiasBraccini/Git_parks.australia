@@ -1,0 +1,176 @@
+---
+title: "DNA barcoding and deepwater longlining"
+output:
+  word_document:  
+    toc: yes
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Parks Australia/2022_project/Report to PA") })
+---
+
+
+```{r globaloptions, include=FALSE}
+source('C:/Users/myb/OneDrive - Department of Primary Industries and Regional Development/Matias/Analyses/SOURCE_SCRIPTS/Git_other/handl_OneDrive.R')
+library(knitr)
+library(tidyverse)
+library(readxl)
+library(Hmisc)
+library(officedown)
+library(flextable)
+
+```
+<!-- global for setting path to figures and formattig -->
+```{r, echo=FALSE}
+#outputs 
+DNA.outputs=handl_OneDrive('Analyses/Parks Australia/outputs/2022 Project/')
+Model.outputs=paste0(DNA.outputs,'Longlining/')   
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, ft.keepnext = F)  #chunk for keep table next to caption
+knitr::opts_chunk$set(tab.cap.pre = "", tab.cap.sep = "")   #remove Table prefix
+knitr::opts_chunk$set(comment = '', fig.width = 10,fig.height = 10)   #figure dimensions
+knitr::opts_chunk$set(number_sections = FALSE)  #suppressing numbering of subheadings
+```
+
+# Executive Summary
+The Temperate Demersal Gillnet and Demersal Longline Fisheries (TDGDLF) are one of the main commercial shark fisheries in Australia. Most fishers in the TDGDLF use demersal gillnets to target sharks with scalefish taken in smaller amounts. Demersal longlines are also permitted but are not widely used.
+The Western Australian Fishing Industry Council (WAFIC) received funding as part of the Australian Government’s Our Marine Parks Grants Program to undertake research on the TDGDLF. This project was administered under the direction of a steering group consisting of WAFIC, the Department of Primary Industries and Regional Development (DPIRD), and the Southern Seafood Producers WA Association (SSPA).
+This project addressed key questions (Can artifical intelligence assist in the electronic monitoring if this fishery? What species are sold Western Australian fish and chip shops? Is the transition from demersal gillnets to deepwater demersal longlines viable? 
+
+We used DNA barcoding (COI gene sequencing) to identify shark species sold in the fish and chip shops of Western Australia. Out of 167 samples analysed, we identified 11 shark, 2 chimaera and 3 teleost species. Most samples (56%) were labelled ambiguously, 35% were mislabelled and only 26% provided area of origin information in the label (mostly ‘local shark’). The ambiguous umbrella label ‘shark’ (53%) comprised mostly dusky, gummy or whiskery sharks and, for products with species-specific labels, most (77%) were advertised as ‘gummy’ or ‘whiskery’ sharks or ‘bronze whaler’, which were identified as gummy, whiskery or dusky sharks. As these three species have similar beach and retail prices, mislabelling gummy shark for whiskery shark or bronze whaler is unlikely due to financial gain but most likely due to the complex dynamics of commercial fishing and seafood supply chains. Based on the global IUCN assessment, 44% of the samples were from threatened species categories (dusky, sandbar, copper and spinner sharks, smooth hammerheads, and shortfin mako). However, using Australian IUCN assessment, only 1 sample (shortfin mako) was from threatened species categories. This highlights the importance of using the best available information (in this case, a region-specific assessment) when providing representative scientific advice. The high incidence of ambiguous labelling and vague fish origin information stresses the importance of mandating accurate labelling for cooked seafood products to allow consumers make informed decisions and foster sustainable fishing practices.Depending on vessel configuration, longlines were set either by using the gillnet reel or a small dedicated longline reel. 
+
+# Background
+
+# DNA barcoding
+## Methods
+### Sample collection and preparation
+One hundred and seventy-four (174) tissue samples were collected from cooked shark fillets purchased from retail fish and chip shops (n=132) between March 2023 and February 2024 throughout the Perth metropolitan (n=108) and regional areas (n=24) of Western Australia, Australia. Samples were collected only from shops with menus that either specifically advertised shark products or that sold unspecified ‘fish’ products, which might include shark products. For products advertised as ‘shark’ or ‘fish and chips’, we asked retailers if they knew the species of shark or fish and the origin of the product. We also collected information about the product price and its origin.
+
+We mainly collected one sample per shop and collected most samples between March 2023 and June 2023. However, to evaluate the consistency of product labelling within a shop, we resampled 28 shops and collected three samples (replicates) of the same product at the same time from an additional seven shops in the Perth metropolitan area between October 2023 and February 2024. Shops subject to repeat and replicate sampling were selected at random. Details about the sampling are provided in supplementary table (Table S1). Approximately 30 mg of muscle tissue was taken from each cooked fillet and stored in 100% ethanol. We used sterilised forceps, scissors, and scalpel blades for each dissection to avoid cross-contamination.
+
+### Genetic work
+#### DNA extractions 
+Total genomic DNA was extracted from the ethanol-preserved tissue samples using a MasterPure™ complete DNA and RNA Extraction Kit, following the manufacturer’s guidelines for tissue samples (Epicentre ® Biotechnologies, Madison, WI). Immediately before extraction, tissue samples were rinsed in approximately 6 ml of distilled water for 10–20 s to remove the ethanol.
+
+#### PCR
+We amplified fragments of the mitochondrial COI gene from the DNA extracts using polymerase chain reaction (PCR), with two sets of primers (i.e., COIElaF and COIElaR, 814 bp; FishF2_t1_ds and FishR2_t1, 652 bp) designed by Alvarenga et al. (2021). We first tried the amplification using the COIElaF and COIElaR primer pair. For those samples that failed to amplify with these primers we tried again using the FishF2_t1_ds and FishR2_t1 primer pair. 
+
+PCR mixtures were conducted in 25 µL volumes comprising 2.5 µL Roche® Taq Buffer, 1 µL of DNA, 1.25 µL dNTPs (10 mM of each), 0.25 µL of forward and reverse primer (10 µM), 0.05 µL Roche® Taq Enzyme, 20.35 µL of PCR grade water and 0.35 µL BSA (bovine serum albumin, 10 µg/µL). PCR amplification was performed as described by Lawrie et al. (2023), except that the annealing temperature was 50° C. We confirmed the presence of the PCR product using agarose gel electrophoresis, as described by Lawrie et al. (2023). 
+
+#### Sequencing
+PCR amplicons were sent to Macrogen Inc. (South Korea) for purification and sequencing. Sequencing chromatograms were examined using Chromas v2.6.6 (https://technelysium.com.au/wp/). The forward and reverse sequences were compared. The consensus sequences were aligned using MUSCLE (Edgar, 2004) in MEGA 11 (Molecular Evolutionary Genetics Analysis, Tamura et al., 2021). Haplotypes in our COI dataset were identified using DnaSP (ver. 6.12.03, see http://www.ub.edu/dnasp/; (Rozas et al., 2017). All COI sequences generated in this study are available on GenBank (Accession number: PV716018 – PV716175 and PV716186 – PV716194, see Table S2,). These sequences were translated to amino acids to test for evidence (e.g., the presence of stop codons) that we had in advertently amplified nuclear copies of this gene or of other sequence anomalies but none were found.
+
+### Analyses 
+#### Species identification
+A preliminary assessment of the species identity of samples was made by finding the best match between our samples and known sequences from GenBank (using a nucleotide BLAST search; (https://blast.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastn&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome) and BOLD system (Barcode of Life Data, using animal identification request search, https://v3.boldsystems.org/index.php/IDS_OpenIdEngine). A species name was tentatively assigned to the sample if it showed the highest match with COI sequences for the same species on both the GenBank and Bold databases and the percentage similarity between the two sequences was > 98% for the former (see Sharrad et al., 2023).
+
+The species identifications were confirmed using both Maximum Likelihood (ML) and Bayesian Inference (BI) phylogenetic analyses. Along with the COI sequences obtained in the present study, 164, 23 and 20 COI sequences from the BOLD database (Table S4), representing 88 shark, 11 chimaera and 3 teleost fish species, respectively were also added to the phylogenetic analyses. For the species of a genus within a family identified in the seafood products, we focused exclusively on those genera for phylogenetic analysis. Consequently, at least two COI sequences from BOLD were randomly selected for each species of the genus of interest, with representatives from all other genera within the family serving as outgroups. This pattern was repeated across the different family trees (see Figures S1–S14).
+For the ML analyses, the best nucleotide substitution models (i.e., TVM+I+G for Carcharhinid species, TPM2uf+I+G for Triakid species, TIM2+I+G for Sphyrnid and Galeocerdonid species, HKY+I for Lamnid species, HKY+I for Orectolobid species, TMV+G for Chimaera species and TIM2+I+G for teleost) were chosen according to AIC criterion using jModelTest v2.1.10 (Darriba et al., 2012). Separate ML trees for these groups were built with IQ-TREE web server (http://iqtree.cibiv.univie.ac.at) (see Nguyen et al., 2015) with 5000 ultrafast bootstraps (see Minh et al., 2013). BI analysis was performed separately for each dataset using BEAST v1.10.4 (Suchard et al., 2018). This analysis used the aforementioned substitution models with following settings: trees (coalescent: constant size) and clocks (uncorrelated relaxed clock). The analysis was run for 50 million generations, and the estimated sample size (ESS) was verified by examining the log-output file using Tracer (see Rambaut et al., 2018). The ESS was over 200. A burn-in of 10% of the initial trees was discarded, and the maximum clade credibility tree was generated with a posterior probability threshold of 0.95 using TreeAnnotator 1.10.4 with its default settings. Phylogenetic trees (ML and BI) were visualised and annotated in FigTree.v1.4.4 
+
+#### Product labelling and conservation status
+In the context of our study, mislabelling refers to a mismatch between the advertised product label and the identified species via COI sequencing whereas ambiguous labelling refers to products marketed under generic/umbrella terms ‘shark’ or ‘fish and chips’ or unspecified ‘flake’. For example, a product labelled as ‘shark’ that contained gummy shark is counted as ambiguous but not mislabelled. In contrast, a product labelled as ‘shark’ that contained cape elephantfish is counted as mislabelled and ambiguous. Finally, a product labelled as ‘gummy flake’ that contain ‘cape elephantfish’ is counted as mislabelled but not ambiguous. The conservation status of the identified species was determined from the IUCN status (global and Australian assessments), with ‘Threatened’ species defined as those listed in the Critically Endangered, Endangered or Vulnerable categories (Kyne et al., 2021).
+
+#### Statistical analyses
+Data analyses were done using the statistical package R (R Core Team, 2021). We produced Sankey plots (using the ‘ggsankey’ package) to display the relationship between advertised product labels on fish and chip shop menus and species identities based on the COI sequencing and to evaluate seasonal changes in labelling practices and test for consistency in labelling within shops.  
+
+We compared the geographic origin of the identified species with the origin information of each advertised product. Although COI gene cannot always determine the area of origin of a species (Barendse et al., 2019), we used FishBase as a reference source for the identified species to compare against the origin information of the advertised product. We considered only specific areas of origin (e.g., New Zealand, South Africa, or another country) for each identified species. Identified species with ‘global’ or ‘wide’ geographic distributions were excluded from this analysis because ‘global’ or ‘wide’ does not inform on area of origin.
+
+ Finally, we used a generalised linear model to test the effect of mislabelling (‘yes’ or ‘no’), ambiguous labelling (‘yes’ or ‘no’), shop location in a regional area (‘yes’ if located in a coastal town; ‘no’ if located in the Perth metropolitan area) and median house price for the suburb where the shop was located on the price of sampled products. Price had a normal distribution. Median house price was sourced from https://www.realestate.com.au/.
+
+
+## Results
+### COI dataset
+Of the COI sequences generated from 174 seafood products in this study, those from 167 products were of high quality. Those from the remaining seven products had low quality chromatograms and were excluded from analyses. The final aligned COI gene fragment was 645 bp in length, excluding gaps and missing data (Table S3). Following alignment and trimming, a total of 28 haplotypes were identified. 
+
+### Species identification
+A total of 16 species were identified via matching of the COI sequences from the 167 products from fish and chip shops in Western Australia with reference sequences on the GenBank and BOLD databases (Table S6). Sequence/s from all of these also formed exclusive, well-supported clades with the reference sequences of the same species in both the BI and ML phylogenetic trees (Figures S1– S14). 
+
+The 16 species identified comprised eleven shark species (from the Carcharhinidae, Triakidae, Sphyrnidae, Lamnidae, Orectolobidae, and Galeocerdonidae), two chimaera species (from the Callorhinchidae and Chimaeridae) and three teleost species (from the Merlucciidae and Scombridae) (Table S6). The most commonly identified species were the dusky shark (Carcharhinus obscurus, n = 55), gummy shark (M. antarcticus, n = 32), whiskery shark (Furgaleus macki, n = 28), and cape elephantfish (Callorhinchus capensis, n = 19) (Table S6).
+
+### Product labels vs genetic identification
+The 167 sampled products were advertised/labelled as ‘shark’, ‘fish and chips’, ‘flake’, ‘bronze whaler’, ‘bronze/gummy’, ‘fish (hoki)’, ‘hammerhead shark’, ‘whiskery shark’, ‘gummy shark’ and ‘carpet shark’ (see Figure 1). However, ‘shark’ was the most commonly used label (n=89), followed by ‘gummy shark’ (n=42) and ‘bronze whaler’ (n=22, Table S5). 
+
+Overall, 56.3% of the samples were ambiguously labelled and 35.3% were mislabelled (Table S5). The label ‘shark’ comprised mostly of dusky shark, followed by gummy and whiskery sharks and cape elephant fish (Figure 1). ‘Gummy shark’ was the most common unambiguous label, and it comprised mostly of whiskery, gummy and dusky sharks. ‘Bronze whaler’ was the second most common unambiguous label and it comprised mostly of dusky shark, followed by gummy shark (Figure 1).  
+
+For ambiguous labels, when asked about the species being sold most retailers provided unambiguous species names but 64.1% were mislabelled (Table S7). Most retailers answered ‘gummy shark’, which comprised mostly of dusky and gummy sharks, or ‘bronze whaler’, which comprised mostly of dusky and gummy sharks (Table S7 and Figure 2). 
+
+Repeating sampling throughout the year showed that 57% (16 out of 28) of the samples matched between the two sampling events (Table S8, and Figure S15). Most of the samples were labelled as ‘gummy shark’, which in both sampling events comprised mostly of gummy, dusky and whiskery sharks. In addition, there was high consistency within sampling events. For all the shops where 3 samples were collected, samples matched 100%, consisting of either dusky or gummy sharks (Table S9 and Figure S16). 
+
+### Conservation status
+Based on the global IUCN assessment, 36.5% of the total samples (n = 55 dusky shark; n = 5 sandbar shark, Carcharhinus plumbeus and n = 1 shortfin mako) were categorised as ‘Endangered’ and 7.2% (n = 8 smooth hammerhead, Sphyrna zygaena; n = 3 copper shark, Carcharhinus brachyurus and n = 1 spinner shark, Carcharhinus brevipinna) were categorised as ‘Vulnerable’, therefore falling within the ‘Threatened’ categories (Table S6, Figure 3). In contrast, based on the Australian IUCN assessment (Kyne et al., 2021), most samples were classed as ‘Near Threatened’ (41.3%) or ‘Least Concern’ (40.7%), with only shortfin mako (n = 1), assessed as ‘Vulnerable’, falling within the ‘Threatened’ categories (Table S6, Figure 3). 
+
+### Area of origin 
+Among the 16 species identified, six had a global distribution, including dusky (n = 55), sandbar (n = 5), copper (n = 3) and spinner (n = 1) sharks, smooth hammerhead (n = 8), and shortfin mako (n = 1) were excluded from the assessment of area of origin. Forty seven percent (79 out of 167) of samples had area of origin information provided by either the advertised labels (n = 44) or by retailers when asked about the product origin (n = 35) (Tables S10 & S11). When origin was provided in the label, 84% of cases were in agreement between the label and the origin of the sequenced species (Table S10). For ambiguous labels, 80% of cases were in agreement between the origin provided by the retailer and the origin of the sequenced species (Table S11). Based on the label or retailer responses, most products were ‘locally’ sourced (93% of origin labels). COI sequencing indicated that most products originated from Australia (84% of origin labels), followed by South Africa (16% of origin labels).
+
+### Product price dynamics
+There was a significant effect of shop location and the incidence of mislabelling or ambiguous labelling on product price, with coastal town and median house price explaining relatively more of the deviance (Table S12, Figure 4). Product price was higher in shops located in coastal towns and more affluent suburbs and it was also higher for shops that were not mislabelling or not using ambiguous labels.
+
+
+# Deepwater longlining
+## Methods
+TDGDLF vessels were chartered to fish with demersal longlines in waters deeper than 200 m. The process for selecting suitable vessels involved discussions with all commercial licence holders in the TDGDLF. Only three operates expressed interest. The three operators were distributed across the WCDGDLF and Zone 1 and Zone 2 of the SDGDLF, providing the ability for robust data collection. Sampling followed standard commercial fishing operations with skippers allowed to choose when and where the gear was set so fishing behaviour and location represent normal commercial fishing practices. Demersal longlines were supplied and operated by each fisher and had the same configuration used in TDGDLF. Each hook was manually baited with mullet, octopus, cuttlefish or mackerel. One scientific observer was on board each vessel and collected data on GPS location, depth, date, time, length (fork length, FL, for sharks, and total length, TL, for scalefish) and catch composition for each observed shot, which were conducted in the West and South Coast Bioregions (Figure 1).
+
+The intention was to to undertake 40 chartered fishing days on TDGDLF vessels to monitor the use of demersal longlines in waters >200 m depth. However, due to external circumstances, the Zone 2 operator was not able to participate of the longline survey and operators in Zone 1 and West coast were only available to conduct 1 and 2 fishing trips, respectively. Hence, only very limited data were collected to evaluate the effectiveness of deepwater longlining and are not considered representative of potential catches and catch rates of deepwater demersal longlines. Data were sumarized in tables and barplots.
+
+## Results
+A total of 3 fishing days and 5 shots were done (Figure 1) in depths ranging 241 to 550 m (Table 1). Soak time ranged 1.5 to 6.2 hours and number of hooks ranged 250 to 480 (Table 1).
+
+```{r, echo=FALSE}
+path=paste(Model.outputs,'/Figure 1_map site area.tiff',sep='')
+
+```
+![Figure 1. Map of study area showing the location of gear deployments.](`r path`){width=800px}
+
+
+```{r, echo=FALSE, results ='asis', ft.align="left"}
+Table1=read.csv(paste(Model.outputs,'Table 1_Shot specs.csv',sep='/'))%>%
+  mutate(Year=as.character(Year),
+         Soak.time..hours.=round(Soak.time..hours.,2))%>%
+  rename('Depth (m)'=Depth..m.,
+         'Soak time (hours)'=Soak.time..hours.,
+         'Number of hooks'=Number.of.hooks)
+flextable(Table1)%>%
+  bg(bg = 'grey85', part = "header")%>%
+  bold(part = "header")%>%
+    width(j='Soak time (hours)',width=2,unit='cm')%>%
+  width(j='Number of hooks',width=2,unit='cm')%>%
+  valign(j=1:6, valign = "top", part = "all")%>%
+  set_caption(caption = "Table 1. Summary of fishing shots.",autonum = NULL)
+```
+
+<br>
+  
+The number of individuals sampled by species and fishing gear is presented in Table 2. A total of 11 taxonomic groups were caught with the catch dominated by dogfish, which are likely to be piked spurdogs (*Squalus megalops*), followed by pink snapper and nannygai. Catch rates ranged between 0.32 and 150 individuals per 1000 hook hour. 
+
+
+```{r, echo=FALSE, results ='asis', ft.align="left"}
+Table2=read.csv(paste(Model.outputs,'Table 2_All species.csv',sep='/'))%>%
+  rename('Number'=n,
+         'Common name'=Common.name,
+         'Scientific name'=Scientific.name,
+         'Min cpue'=Min.cpue..n.1000.hook.hour.,
+         'Max cpue'=Max.cpue..n.1000.hook.hour.)
+flextable(Table2)%>%
+  bg(bg = 'grey85', part = "header")%>%
+  bold(part = "header")%>%
+  italic(j='Scientific name')%>%
+  width(j='Common name',width=3,unit='cm')%>%
+  width(j='Scientific name',width=6,unit='cm')%>%
+  width(j='Min cpue',width=2,unit='cm')%>%
+  width(j='Max cpue',width=2,unit='cm')%>%
+  valign(j=1:5, valign = "top", part = "all")%>%
+  set_caption(caption = "Table 2. Summary of catch composition and catch per unit of effort (cpue, in number of individuals per 1000 hook hour).",autonum = NULL)
+```
+
+<br>
+
+The length composition of the catch is shown in Figure 2. For the most commonly caught species, dogfishes ranged between 40 and 80 cm FL, pink snapper ranged between 40 and 70 cm TL and nannygai ranged between 20 and 10 cm TL. Dogfishes were caught over a broad depth range whereas pink snapper were mostly caught in the shallower shots and nannygai in the deeper shots.
+
+
+```{r, echo=FALSE}
+path=paste(Model.outputs,'/Figure 2_size frequency.tiff',sep='')
+```
+![Figure 2. Size composition of caught species by depth strata.](`r path`){width=800px}
+
+
+# Supplementary materials
+## DNA barcoding
