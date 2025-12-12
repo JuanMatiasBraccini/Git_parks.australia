@@ -6714,6 +6714,9 @@ if(do.habitat)
            MORPHOLOGY=capitalize(MORPHOLOGY),
            TYPE=capitalize(TYPE),
            BROAD=case_when(BROAD%in%c('Consolidated','Unconsolidated') ~'Substrate',
+                           BROAD%in%c('Sponge') ~'Sponges',
+                           BROAD%in%c('Hydroid') ~'Hydroids',
+                           BROAD%in%c('Seagrass') ~'Seagrasses',
                            TRUE ~ BROAD))%>%
     filter(FieldOfView=='Facing Down')%>%
     filter(!BROAD=='Open Water')%>%
@@ -6733,6 +6736,9 @@ if(do.habitat)
            MORPHOLOGY=capitalize(MORPHOLOGY),
            TYPE=capitalize(TYPE),
            BROAD=case_when(BROAD%in%c('Consolidated','Unconsolidated') ~'Substrate',
+                           BROAD%in%c('Sponge') ~'Sponges',
+                           BROAD%in%c('Hydroid') ~'Hydroids',
+                           BROAD%in%c('Seagrass') ~'Seagrasses',
                            TRUE ~ BROAD))%>%
     filter(FieldOfView=='Facing Down')%>%
     filter(!BROAD=='Open Water')%>%
