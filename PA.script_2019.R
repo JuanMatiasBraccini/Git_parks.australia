@@ -3,7 +3,6 @@
 # Note: Upload of video data done by PA.script_shared.R see #5. PA - underwater video
 
 # Missing: 
-#   updated Habitat using Santiago's Video.habitat see #----Analyse PA Habitat --
 #   Review calculations with Jack '#4. Rates of depredation, bait loss and drop outs'
 #   Fish depredation. Calculate also per km gn hours and per caught fish. Same for other behaviours
 #   Depredation codes from Underwater video: Codes 10 Predated on & 12 Caught while predating
@@ -6695,7 +6694,7 @@ if(do.general.underwater)
 #---------Analyse PA Habitat ------------
 if(do.habitat)
 {
-  #aca: missing, combine Santiago's and Jacks and update figures
+  
   #Santiago's data in M:\Production Databases\Shark\ParksAustralia_2019\Habitat Analysis\TMobs
   if(!exists('Video.habitat'))  #original data put together by Jack
   {
@@ -6826,8 +6825,8 @@ if(do.habitat)
             Out.damg_under_GN$p2, Out.damg_under_LL$p2,
             Out.damg_under_GN$p3, Out.damg_under_LL$p3,
             ncol = 2, nrow = 3)
-  ggsave(le.paste("Video/underwater/Habitats_coarse.records.tiff"),
-         width = 10,height = 10,compression = "lzw")
+  ggsave(le.paste("Video/underwater/Habitats_coarse.records.tiff"),  
+         width = 10.5,height = 10,compression = "lzw")
   
   
   # 2. Underwater observations of habitat damage  
