@@ -322,7 +322,8 @@ df <- DATA %>%
   make_long(report_label,Common_name_sequenced)%>%
   mutate(x=ifelse(x=='report_label','Product label',
                   ifelse(x=='Common_name_sequenced','Sequenced species',
-                         NA)))
+                         NA))) 
+
 #sort(unique(df$node))
  species_colors=c("blue grenadier"='cadetblue4',"bronze whaler"='chocolate1',"bronze/gummy"='darkgoldenrod4',
                   "cape elephantfish"='darkolivegreen3',"carpet shark"='darkgoldenrod2', 
@@ -341,12 +342,14 @@ p=ggplot(df, aes(x = x,
                  fill = factor(node),
                  label = node)) +
   geom_sankey(flow.alpha = 0.5, node.color = 1) +
-  geom_sankey_label(size = 4, color = 'white') +  
+  geom_sankey_label(size = 3.5, color = 'white') +  
   theme_sankey(base_size = 16) +
   guides(fill = guide_legend(title = "Title"))+
   theme(legend.position = "none")+xlab('')
-p+scale_fill_manual(values = species_colors)
-ggsave(le.paste("Sankey_label_sequenced.tiff"),width = 6,height = 8,compression = "lzw")
+p+
+  scale_x_discrete(labels = c("report_label" = "Product label", "Sequenced species" = "Genetic identification"))+
+  scale_fill_manual(values = species_colors)
+ggsave(le.paste("Sankey_label_sequenced.tiff"),width = 6,height = 8.5,compression = "lzw") #ACA
 
 # Plot mismatch origin  ----------------------------------------------------------------
 Tab1=DATA%>%
@@ -479,7 +482,7 @@ annotate_figure(figure,
                 bottom = text_grob("Occurrence", size=16))
 ggsave(le.paste("Status_IUCN_only.tiff"),width = 8,height = 8,compression = "lzw")
 
-#IUCN only - paper ACA
+#IUCN only - paper 
 p_IUCN_Oz_paper=DATA%>%
                   mutate(Common_name_sequenced=capitalize(Scientific_name_sequenced))%>%
                   group_by(Common_name_sequenced,IUCN.status)%>%
@@ -607,12 +610,13 @@ p=ggplot(df, aes(x = x,
                  fill = factor(node),
                  label = node)) +
   geom_sankey(flow.alpha = 0.5, node.color = 1) +
-  geom_sankey_label(size = 4, color = 'white') +  
+  geom_sankey_label(size = 3.5, color = 'white') +  
   theme_sankey(base_size = 16) +
   guides(fill = guide_legend(title = "Title"))+
   theme(legend.position = "none")+xlab('')
-p+scale_fill_manual(values = species_colors_do.u.know)
-ggsave(le.paste("Mislabelling_ambiguous_Sankey_label_sequenced.tiff"),width = 6,height = 8,compression = "lzw")
+p+scale_fill_manual(values = species_colors_do.u.know)+
+  scale_x_discrete(labels = c("Retailer answer" = "Product ID", "Sequenced species" = "Genetic identification"))
+ggsave(le.paste("Mislabelling_ambiguous_Sankey_label_sequenced.tiff"),width = 6,height = 8.5,compression = "lzw") #ACA
 
 
 write.csv(dummy%>%
